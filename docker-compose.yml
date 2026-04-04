@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ticketflow
+      POSTGRES_USER: ticketflow
+      POSTGRES_PASSWORD: ticketflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  mcp:
+    build:
+      context: .
+      dockerfile: mcp_service/Dockerfile
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://ticketflow:ticketflow@postgres:5432/ticketflow
+    depends_on:
+      - postgres
+    ports:
+      - "8001:8001"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_ENV: development
+      PORT: 8080
+      DATABASE_URL: postgresql+psycopg://ticketflow:ticketflow@postgres:5432/ticketflow
+      MCP_SERVER_URL: http://mcp:8001/mcp
+      CORS_ORIGINS: http://localhost:5173,http://localhost:8080
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-false}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      ENABLE_HEURISTIC_FALLBACK: ${ENABLE_HEURISTIC_FALLBACK:-true}
+    depends_on:
+      - postgres
+      - mcp
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres-data:
