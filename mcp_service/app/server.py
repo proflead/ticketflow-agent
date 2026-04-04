@@ -18,10 +18,13 @@ def create_task(task: TaskCreate) -> dict:
     """Create a task record."""
     with get_session() as session:
         db_task = Task(
+            case_id=task.case_id,
             title=task.title,
             description=task.description,
             priority=task.priority,
             due_at=task.due_at,
+            issue_category=task.issue_category,
+            assigned_team=task.assigned_team,
             source_text=task.source_text,
         )
         session.add(db_task)
@@ -46,6 +49,7 @@ def create_event(event: EventCreate) -> dict:
     """Create a scheduled event."""
     with get_session() as session:
         db_event = Event(
+            case_id=event.case_id,
             title=event.title,
             description=event.description,
             start_at=event.start_at,
@@ -73,6 +77,7 @@ def add_note(note: NoteCreate) -> dict:
     with get_session() as session:
         title = note.title or derive_note_title(note.body)
         db_note = Note(title=title, body=note.body, metadata_json=note.metadata_json)
+        db_note.case_id = note.case_id
         session.add(db_note)
         session.commit()
         session.refresh(db_note)

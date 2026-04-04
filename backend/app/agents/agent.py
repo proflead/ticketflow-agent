@@ -12,22 +12,34 @@ from app.services.mcp_gateway import MCPGateway, tool_from_async
 
 
 def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
-    async def create_task_from_request(request_text: str, priority: str = "medium", description: str | None = None) -> dict:
+    async def create_task_from_request(
+        request_text: str | None = None,
+        priority: str = "medium",
+        description: str | None = None,
+        issue_category: str | None = None,
+        assigned_team: str | None = None,
+    ) -> dict:
+        if not request_text:
+            raise ValueError("request_text is required to create a task.")
         task = TaskCreate(
             title=derive_task_title(request_text),
             description=description or request_text,
             priority=priority,
+            issue_category=issue_category,
+            assigned_team=assigned_team,
             source_text=request_text,
         )
         created = await gateway.create_task("task_agent", task)
         return created.model_dump(mode="json")
 
     async def create_event_from_request(
-        request_text: str,
+        request_text: str | None = None,
         title: str | None = None,
         start_at_iso: str | None = None,
         end_at_iso: str | None = None,
     ) -> dict:
+        if not request_text:
+            raise ValueError("request_text is required to create an event.")
         if start_at_iso and end_at_iso:
             start_at = datetime.fromisoformat(start_at_iso)
             end_at = datetime.fromisoformat(end_at_iso)
@@ -49,7 +61,9 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         created = await gateway.create_event("calendar_agent", event)
         return created.model_dump(mode="json")
 
-    async def save_note_from_request(note_text: str, title: str | None = None) -> dict:
+    async def save_note_from_request(note_text: str | None = None, title: str | None = None) -> dict:
+        if not note_text:
+            raise ValueError("note_text is required to save a note.")
         note = NoteCreate(title=title or derive_note_title(note_text), body=note_text, metadata_json={"source": "agent"})
         created = await gateway.add_note("notes_agent", note)
         return created.model_dump(mode="json")
@@ -73,6 +87,8 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         instruction=(
             "You are the task specialist. Use the provided tools to create tasks or list open tasks. "
             "When the user requests follow-up tasks, extract concise titles and create them. "
+            "When the work relates to a support issue or bug, include an issue_category and assigned_team "
+            "that best fit the problem domain. "
             "Return a short natural-language handoff summary."
         ),
         tools=[

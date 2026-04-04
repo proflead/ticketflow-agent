@@ -51,3 +51,7 @@ export function deleteNote(id: string) {
 export function deleteWorkflowRun(id: string) {
   return deleteResource(`/api/workflow-runs/${id}`);
 }
+
+export function deleteCase(id: string) {
+  return deleteResource(`/api/cases/${id}`);
+}

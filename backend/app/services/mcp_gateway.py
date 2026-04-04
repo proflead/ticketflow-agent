@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import UUID
 
 from fastmcp import Client
 
@@ -12,6 +13,7 @@ from ticketflow_shared.schemas import EventCreate, EventRead, NoteCreate, NoteRe
 @dataclass
 class MCPGateway:
     server_url: str
+    active_case_id: UUID | None = None
     steps: list[WorkflowStep] = field(default_factory=list)
     created_tasks: list[TaskRead] = field(default_factory=list)
     created_events: list[EventRead] = field(default_factory=list)
@@ -39,6 +41,8 @@ class MCPGateway:
         return data if isinstance(data, dict) else {"result": data}
 
     async def create_task(self, agent: str, task: TaskCreate) -> TaskRead:
+        if self.active_case_id and task.case_id is None:
+            task = task.model_copy(update={"case_id": self.active_case_id})
         data = await self._call(agent, "create_task", {"task": task.model_dump(mode="json")})
         task_out = TaskRead.model_validate(data["task"])
         self.created_tasks.append(task_out)
@@ -51,6 +55,8 @@ class MCPGateway:
         return tasks
 
     async def create_event(self, agent: str, event: EventCreate) -> EventRead:
+        if self.active_case_id and event.case_id is None:
+            event = event.model_copy(update={"case_id": self.active_case_id})
         data = await self._call(agent, "create_event", {"event": event.model_dump(mode="json")})
         event_out = EventRead.model_validate(data["event"])
         self.created_events.append(event_out)
@@ -63,6 +69,8 @@ class MCPGateway:
         return events
 
     async def add_note(self, agent: str, note: NoteCreate) -> NoteRead:
+        if self.active_case_id and note.case_id is None:
+            note = note.model_copy(update={"case_id": self.active_case_id})
         data = await self._call(agent, "add_note", {"note": note.model_dump(mode="json")})
         note_out = NoteRead.model_validate(data["note"])
         self.created_notes.append(note_out)

@@ -9,7 +9,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from sqlalchemy import desc, select
 
-from ticketflow_shared.models import Event, Note, Task, WorkflowRun, WorkflowStatus
+from ticketflow_shared.models import Event, Note, SupportCase, Task, WorkflowRun, WorkflowStatus
 from ticketflow_shared.schemas import (
     DeleteResponse,
     EventCreate,
@@ -17,6 +17,7 @@ from ticketflow_shared.schemas import (
     NoteCreate,
     NoteRead,
     StateResponse,
+    SupportCaseRead,
     TaskCreate,
     TaskRead,
     WorkflowResult,
@@ -41,18 +42,25 @@ class WorkflowEngine:
 
     async def run(self, request: WorkflowRunRequest) -> WorkflowRunResponse:
         with get_session() as session:
-            workflow_run = WorkflowRun(request_text=request.prompt, status=WorkflowStatus.running)
+            triage = self._classify_issue(request.prompt)
+            support_case = self._create_case(session, request.prompt, triage)
+            workflow_run = WorkflowRun(
+                case_id=support_case.id,
+                request_text=request.prompt,
+                status=WorkflowStatus.running,
+            )
             session.add(workflow_run)
             session.commit()
             session.refresh(workflow_run)
 
             try:
-                result, engine_mode = await self._run_agents(request.prompt)
+                result, engine_mode = await self._run_agents(request.prompt, support_case)
                 workflow_run.status = WorkflowStatus.completed
                 workflow_run.summary = result.summary
                 workflow_run.steps_json = [step.model_dump(mode="json") for step in result.steps]
                 workflow_run.artifacts_json = {
                     "engine_mode": engine_mode,
+                    "triage": result.triage,
                     "tasks": [task.model_dump(mode="json") for task in result.tasks],
                     "events": [event.model_dump(mode="json") for event in result.events],
                     "notes": [note.model_dump(mode="json") for note in result.notes],
@@ -65,6 +73,8 @@ class WorkflowEngine:
                     engine_mode=engine_mode,
                     summary=result.summary,
                     steps=result.steps,
+                    triage=result.triage,
+                    case=result.case,
                     tasks=result.tasks,
                     events=result.events,
                     notes=result.notes,
@@ -82,17 +92,24 @@ class WorkflowEngine:
                     engine_mode="heuristic_fallback",
                     summary="The workflow could not be completed.",
                     steps=[],
+                    triage={},
+                    case=SupportCaseRead.model_validate(support_case),
                     tasks=[],
                     events=[],
                     notes=[],
                     errors=[str(exc)],
                 )
 
-    async def _run_agents(self, prompt: str) -> tuple[WorkflowResult, str]:
-        gateway = MCPGateway(self.settings.mcp_server_url)
+    async def _run_agents(self, prompt: str, support_case: SupportCase) -> tuple[WorkflowResult, str]:
+        gateway = MCPGateway(self.settings.mcp_server_url, active_case_id=support_case.id)
         errors: list[str] = []
         summary = ""
         engine_mode = "heuristic_fallback"
+        triage = {
+            "issue_category": support_case.issue_category or "General Support",
+            "assigned_team": support_case.assigned_team or "Support Operations",
+            "severity": support_case.severity or "medium",
+        }
 
         if self._can_use_adk():
             try:
@@ -113,9 +130,9 @@ class WorkflowEngine:
                     raise
                 logger.exception("ADK/Gemini execution failed; falling back to heuristic mode.")
                 errors.append(f"ADK execution failed, used heuristic fallback: {exc}")
-                summary = await self._heuristic_fallback(prompt, gateway)
+                summary = await self._heuristic_fallback(prompt, gateway, triage)
         else:
-            summary = await self._heuristic_fallback(prompt, gateway)
+            summary = await self._heuristic_fallback(prompt, gateway, triage)
 
         if not summary:
             summary = self._compose_summary(gateway)
@@ -123,6 +140,8 @@ class WorkflowEngine:
         return WorkflowResult(
             summary=summary,
             steps=gateway.steps,
+            triage=triage,
+            case=SupportCaseRead.model_validate(support_case),
             tasks=gateway.created_tasks or gateway.listed_tasks,
             events=gateway.created_events or gateway.listed_events,
             notes=gateway.created_notes or gateway.searched_notes,
@@ -132,7 +151,7 @@ class WorkflowEngine:
     def _can_use_adk(self) -> bool:
         return bool(self.settings.google_api_key or self.settings.google_genai_use_vertexai)
 
-    async def _heuristic_fallback(self, prompt: str, gateway: MCPGateway) -> str:
+    async def _heuristic_fallback(self, prompt: str, gateway: MCPGateway, triage: dict[str, str]) -> str:
         text = prompt.strip()
         lower = text.lower()
 
@@ -164,9 +183,11 @@ class WorkflowEngine:
             await gateway.create_task(
                 "task_agent",
                 TaskCreate(
-                    title="Follow up on support issue",
+                    title=f"{triage['assigned_team']}: follow up on {triage['issue_category']} issue",
                     description=text,
                     priority="high" if "high" in lower or "urgent" in lower else "medium",
+                    issue_category=triage["issue_category"],
+                    assigned_team=triage["assigned_team"],
                     source_text=text,
                 ),
             )
@@ -175,7 +196,14 @@ class WorkflowEngine:
             priority = "high" if "high-priority" in lower or "high priority" in lower else "medium"
             await gateway.create_task(
                 "task_agent",
-                TaskCreate(title=derive_task_title(text), description=text, priority=priority, source_text=text),
+                TaskCreate(
+                    title=derive_task_title(text),
+                    description=text,
+                    priority=priority,
+                    issue_category=triage["issue_category"] if self._looks_like_issue(lower) else None,
+                    assigned_team=triage["assigned_team"] if self._looks_like_issue(lower) else None,
+                    source_text=text,
+                ),
             )
 
         if "block" in lower or "schedule" in lower or "reminder" in lower:
@@ -219,13 +247,67 @@ class WorkflowEngine:
             parts.append(f"found {len(gateway.searched_notes)} note(s)")
         return ", ".join(parts).capitalize() + "." if parts else "No actions were taken."
 
+    def _looks_like_issue(self, lower_text: str) -> bool:
+        return any(token in lower_text for token in ["issue", "bug", "error", "broken", "cannot", "can't", "failed"])
+
+    def _classify_issue(self, prompt: str) -> dict[str, str]:
+        text = prompt.lower()
+        team = "Support Operations"
+        category = "General Support"
+
+        rules = [
+            (["login", "password", "auth", "permission", "access denied"], ("Identity & Access", "Authentication")),
+            (["email", "notification", "message", "inbox"], ("Communications", "Notifications")),
+            (["billing", "invoice", "payment", "pricing", "discount"], ("Billing", "Billing & Pricing")),
+            (["onboarding", "setup", "provisioning"], ("Customer Success", "Onboarding")),
+            (["api", "integration", "webhook", "sync"], ("Platform Engineering", "Integrations")),
+            (["bug", "error", "crash", "broken", "exception"], ("Engineering", "Product Bug")),
+            (["ui", "button", "screen", "page", "frontend"], ("Frontend Engineering", "UI Bug")),
+        ]
+
+        for keywords, (next_team, next_category) in rules:
+            if any(keyword in text for keyword in keywords):
+                team = next_team
+                category = next_category
+                break
+
+        severity = "high" if any(token in text for token in ["urgent", "asap", "critical", "today"]) else "medium"
+        return {
+            "issue_category": category,
+            "assigned_team": team,
+            "severity": severity,
+        }
+
+    def _create_case(self, session, prompt: str, triage: dict[str, str]) -> SupportCase:
+        support_case = SupportCase(
+            title=self._derive_case_title(prompt, triage),
+            source_text=prompt,
+            issue_category=triage["issue_category"],
+            assigned_team=triage["assigned_team"],
+            severity=triage["severity"],
+            status="open",
+        )
+        session.add(support_case)
+        session.commit()
+        session.refresh(support_case)
+        return support_case
+
+    def _derive_case_title(self, prompt: str, triage: dict[str, str]) -> str:
+        text = prompt.strip().replace("\n", " ")
+        if text.lower().startswith("support issue:"):
+            text = text.split(":", maxsplit=1)[1].strip()
+        base = text[:140] if text else triage["issue_category"]
+        return f"{triage['issue_category']}: {base}"
+
     def get_state(self) -> StateResponse:
         with get_session() as session:
+            cases = session.scalars(select(SupportCase).order_by(desc(SupportCase.created_at)).limit(10)).all()
             tasks = session.scalars(select(Task).order_by(desc(Task.created_at)).limit(10)).all()
             events = session.scalars(select(Event).order_by(desc(Event.start_at)).limit(10)).all()
             notes = session.scalars(select(Note).order_by(desc(Note.created_at)).limit(10)).all()
             runs = session.scalars(select(WorkflowRun).order_by(desc(WorkflowRun.created_at)).limit(10)).all()
             return StateResponse(
+                cases=[SupportCaseRead.model_validate(case) for case in cases],
                 tasks=[TaskRead.model_validate(task) for task in tasks],
                 events=[EventRead.model_validate(event) for event in events],
                 notes=[NoteRead.model_validate(note) for note in notes],
@@ -233,6 +315,7 @@ class WorkflowEngine:
                     WorkflowRunRead.model_validate(
                         {
                             "id": run.id,
+                            "case_id": run.case_id,
                             "request_text": run.request_text,
                             "status": run.status.value if hasattr(run.status, "value") else run.status,
                             "summary": run.summary,
@@ -283,3 +366,21 @@ class WorkflowEngine:
             session.delete(workflow_run)
             session.commit()
             return DeleteResponse(deleted_id=workflow_run.id, resource="workflow_run")
+
+    def delete_case(self, case_id: str) -> DeleteResponse:
+        with get_session() as session:
+            support_case = session.get(SupportCase, uuid.UUID(case_id))
+            if support_case is None:
+                raise ValueError("Support case not found.")
+
+            tasks = session.scalars(select(Task).where(Task.case_id == support_case.id)).all()
+            events = session.scalars(select(Event).where(Event.case_id == support_case.id)).all()
+            notes = session.scalars(select(Note).where(Note.case_id == support_case.id)).all()
+            runs = session.scalars(select(WorkflowRun).where(WorkflowRun.case_id == support_case.id)).all()
+
+            for record in [*tasks, *events, *notes, *runs]:
+                session.delete(record)
+
+            session.delete(support_case)
+            session.commit()
+            return DeleteResponse(deleted_id=support_case.id, resource="support_case")

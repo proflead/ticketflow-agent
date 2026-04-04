@@ -1,7 +1,7 @@
 """Shared models and schemas for TicketFlow Agent."""
 
 from .database import Base
-from .models import Event, Note, Task, WorkflowRun
+from .models import Event, Note, SupportCase, Task, WorkflowRun
 from .schemas import (
     EventRead,
     NoteRead,
@@ -19,6 +19,7 @@ __all__ = [
     "Base",
     "Event",
     "Note",
+    "SupportCase",
     "Task",
     "WorkflowRun",
     "EventRead",

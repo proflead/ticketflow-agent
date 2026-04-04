@@ -6,19 +6,35 @@ export type WorkflowStep = {
   tool_name?: string | null;
 };
 
+export type SupportCase = {
+  id: string;
+  title: string;
+  source_text: string;
+  issue_category?: string | null;
+  assigned_team?: string | null;
+  severity?: string | null;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type Task = {
   id: string;
+  case_id?: string | null;
   title: string;
   description?: string | null;
   priority: string;
   status: string;
   due_at?: string | null;
+  issue_category?: string | null;
+  assigned_team?: string | null;
   created_at?: string;
   updated_at?: string;
 };
 
 export type Event = {
   id: string;
+  case_id?: string | null;
   title: string;
   description?: string | null;
   start_at: string;
@@ -30,6 +46,7 @@ export type Event = {
 
 export type Note = {
   id: string;
+  case_id?: string | null;
   title: string;
   body: string;
   metadata_json: Record<string, unknown>;
@@ -43,6 +60,8 @@ export type WorkflowResponse = {
   engine_mode: "gemini_adk" | "heuristic_fallback";
   summary: string;
   steps: WorkflowStep[];
+  triage: Record<string, string>;
+  case?: SupportCase | null;
   tasks: Task[];
   events: Event[];
   notes: Note[];
@@ -50,11 +69,13 @@ export type WorkflowResponse = {
 };
 
 export type StateResponse = {
+  cases: SupportCase[];
   tasks: Task[];
   events: Event[];
   notes: Note[];
   workflow_runs: Array<{
     id: string;
+    case_id?: string | null;
     request_text: string;
     status: string;
     summary?: string | null;

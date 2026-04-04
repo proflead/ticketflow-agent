@@ -62,3 +62,12 @@ async def delete_workflow_run(workflow_run_id: str) -> DeleteResponse:
         return engine.delete_workflow_run(workflow_run_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/api/cases/{case_id}", response_model=DeleteResponse)
+async def delete_case(case_id: str) -> DeleteResponse:
+    engine = WorkflowEngine(get_settings())
+    try:
+        return engine.delete_case(case_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
