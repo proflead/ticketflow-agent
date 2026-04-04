@@ -14,20 +14,22 @@ from app.services.mcp_gateway import MCPGateway, tool_from_async
 def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
     async def create_task_from_request(
         request_text: str | None = None,
+        title: str | None = None,
         priority: str = "medium",
         description: str | None = None,
         issue_category: str | None = None,
         assigned_team: str | None = None,
     ) -> dict:
-        if not request_text:
-            raise ValueError("request_text is required to create a task.")
+        source_text = request_text or description or title
+        if not source_text:
+            return {"ok": False, "error": "A task needs request_text, description, or title."}
         task = TaskCreate(
-            title=derive_task_title(request_text),
-            description=description or request_text,
+            title=title or derive_task_title(source_text),
+            description=description or source_text,
             priority=priority,
             issue_category=issue_category,
             assigned_team=assigned_team,
-            source_text=request_text,
+            source_text=source_text,
         )
         created = await gateway.create_task("task_agent", task)
         return created.model_dump(mode="json")
@@ -35,36 +37,64 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
     async def create_event_from_request(
         request_text: str | None = None,
         title: str | None = None,
+        description: str | None = None,
         start_at_iso: str | None = None,
         end_at_iso: str | None = None,
+        start_at: str | None = None,
+        end_at: str | None = None,
+        event_title: str | None = None,
+        details: str | None = None,
     ) -> dict:
-        if not request_text:
-            raise ValueError("request_text is required to create an event.")
-        if start_at_iso and end_at_iso:
-            start_at = datetime.fromisoformat(start_at_iso)
-            end_at = datetime.fromisoformat(end_at_iso)
+        source_text = request_text or description or details or title or event_title
+        start_value = start_at_iso or start_at
+        end_value = end_at_iso or end_at
+        effective_title = title or event_title
+        effective_description = description or details
+
+        if start_value and end_value:
+            start_dt = datetime.fromisoformat(start_value)
+            end_dt = datetime.fromisoformat(end_value)
         else:
-            parsed = parse_relative_schedule(request_text, now=datetime.now(timezone.utc))
+            if not source_text:
+                return {
+                    "ok": False,
+                    "error": "An event needs request_text, description, title, or explicit start/end times.",
+                }
+            parsed = parse_relative_schedule(source_text, now=datetime.now(timezone.utc))
             if parsed is None:
-                raise ValueError(
-                    "Could not determine a schedule. Ask the user for an explicit time like 'tomorrow at 10 AM'."
-                )
-            start_at, end_at = parsed
+                return {
+                    "ok": False,
+                    "error": "Could not determine a schedule. Ask the user for an explicit time like 'tomorrow at 10 AM'.",
+                }
+            start_dt, end_dt = parsed
+
+        if not source_text:
+            source_text = f"Scheduled event from {start_dt.isoformat()} to {end_dt.isoformat()}"
 
         event = EventCreate(
-            title=title or derive_event_title(request_text),
-            description=request_text,
-            start_at=start_at,
-            end_at=end_at,
-            source_text=request_text,
+            title=effective_title or derive_event_title(source_text),
+            description=effective_description or source_text,
+            start_at=start_dt,
+            end_at=end_dt,
+            source_text=source_text,
         )
         created = await gateway.create_event("calendar_agent", event)
         return created.model_dump(mode="json")
 
-    async def save_note_from_request(note_text: str | None = None, title: str | None = None) -> dict:
-        if not note_text:
-            raise ValueError("note_text is required to save a note.")
-        note = NoteCreate(title=title or derive_note_title(note_text), body=note_text, metadata_json={"source": "agent"})
+    async def save_note_from_request(
+        note_text: str | None = None,
+        title: str | None = None,
+        body: str | None = None,
+        request_text: str | None = None,
+    ) -> dict:
+        source_text = note_text or body or request_text or title
+        if not source_text:
+            return {"ok": False, "error": "A note needs note_text, body, request_text, or title."}
+        note = NoteCreate(
+            title=title or derive_note_title(source_text),
+            body=body or note_text or request_text or title or source_text,
+            metadata_json={"source": "agent"},
+        )
         created = await gateway.add_note("notes_agent", note)
         return created.model_dump(mode="json")
 

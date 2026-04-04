@@ -3,10 +3,26 @@ import { runWorkflow } from "../api";
 import { WorkflowResponse } from "../types";
 
 const examplePrompts = [
-  "Support issue: The customer cannot access onboarding emails. Create a follow-up task, schedule a reminder tomorrow at 9 AM, and save a note with the issue summary.",
-  "Save these meeting notes and create follow-up tasks: Action item: send pricing recap. Action item: confirm implementation timeline.",
-  "Create a task to prepare Friday's demo, block one hour tomorrow at 10 AM, and save note: bring pricing slides.",
+  "Support issue: New users cannot reset their password after onboarding. Classify the issue, assign it to the right team, create a follow-up task, schedule a reminder tomorrow at 9 AM, and save a note with the customer impact.",
+  "Support issue: The customer stopped receiving billing emails after changing their account owner. Assign the right team, create a task to investigate, and save a note with the issue summary.",
+  "Save these meeting notes and create follow-up tasks: Action item: send pricing recap today. Action item: confirm implementation timeline. Action item: schedule a reminder tomorrow at 10 AM.",
 ];
+
+function LoadingResult() {
+  return (
+    <div className="mt-6 rounded-2xl border border-black/10 bg-slate-50 p-6 dark:border-white/10 dark:bg-slate-950/60">
+      <div className="flex items-center gap-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-slate-950 dark:border-slate-700 dark:border-t-white" />
+        <div>
+          <p className="text-sm font-semibold text-slate-950 dark:text-white">Running workflow</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            The agent is classifying the issue, creating records, and saving the latest result.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function WorkflowPage() {
   const [prompt, setPrompt] = useState(examplePrompts[0]);
@@ -73,7 +89,9 @@ export function WorkflowPage() {
 
       <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-xl shadow-black/5 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/30">
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Latest Result</p>
-        {!result ? (
+        {loading ? (
+          <LoadingResult />
+        ) : !result ? (
           <div className="mt-6 rounded-2xl border border-dashed border-black/10 p-6 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
             Run a workflow to see the result, created artifacts, and whether Gemini ADK or the fallback path handled it.
           </div>

@@ -1,6 +1,7 @@
 .env
 .env.local
 AGENTS.md
+deploy.md
 .venv/
 __pycache__/
 .pytest_cache/

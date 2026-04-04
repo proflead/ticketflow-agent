@@ -134,6 +134,8 @@ class WorkflowEngine:
         else:
             summary = await self._heuristic_fallback(prompt, gateway, triage)
 
+        await self._ensure_case_artifacts(prompt, gateway, triage)
+
         if not summary:
             summary = self._compose_summary(gateway)
 
@@ -147,6 +149,41 @@ class WorkflowEngine:
             notes=gateway.created_notes or gateway.searched_notes,
             errors=errors,
         ), engine_mode
+
+    async def _ensure_case_artifacts(self, prompt: str, gateway: MCPGateway, triage: dict[str, str]) -> None:
+        if gateway.created_tasks or gateway.created_events or gateway.created_notes:
+            return
+
+        text = prompt.strip()
+        lower = text.lower()
+
+        if "show" in lower or "list" in lower:
+            return
+
+        await gateway.add_note(
+            "notes_agent",
+            NoteCreate(
+                title="Case Intake",
+                body=text,
+                metadata_json={
+                    "source": "workflow_safety_net",
+                    "issue_category": triage["issue_category"],
+                    "assigned_team": triage["assigned_team"],
+                },
+            ),
+        )
+
+        await gateway.create_task(
+            "task_agent",
+            TaskCreate(
+                title=f"{triage['assigned_team']}: review {triage['issue_category']} case",
+                description=text,
+                priority="high" if triage["severity"] == "high" else "medium",
+                issue_category=triage["issue_category"],
+                assigned_team=triage["assigned_team"],
+                source_text=text,
+            ),
+        )
 
     def _can_use_adk(self) -> bool:
         return bool(self.settings.google_api_key or self.settings.google_genai_use_vertexai)

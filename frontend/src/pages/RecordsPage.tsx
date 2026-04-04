@@ -95,7 +95,9 @@ function buildSchedule(tasks: Task[], events: Event[]): { scheduled: ScheduleIte
       meta: `${task.priority} priority`,
     }));
 
-  const unscheduledTasks = tasks.filter((task) => !task.due_at);
+  const unscheduledTasks = tasks
+    .filter((task) => !task.due_at)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const scheduled = [...scheduledEvents, ...scheduledTasks].sort((a, b) => a.sortAt - b.sortAt);
   return { scheduled, unscheduledTasks };
@@ -139,6 +141,22 @@ export function RecordsPage() {
   const activeCase = useMemo(
     () => (state?.cases || []).find((item) => item.id === selectedCaseId) || null,
     [selectedCaseId, state?.cases]
+  );
+
+  const sortedCases = useMemo(
+    () =>
+      [...(state?.cases || [])].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ),
+    [state?.cases]
+  );
+
+  const sortedNotes = useMemo(
+    () =>
+      [...filteredNotes].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ),
+    [filteredNotes]
   );
 
   return (
@@ -191,7 +209,7 @@ export function RecordsPage() {
           {(state?.cases || []).length === 0 ? (
             <p className="text-sm text-slate-400">No support cases saved yet.</p>
           ) : (
-            (state?.cases || []).map((supportCase: SupportCase) => (
+            sortedCases.map((supportCase: SupportCase) => (
               <div
                 key={supportCase.id}
                 className={`rounded-2xl border p-5 transition ${
@@ -215,6 +233,7 @@ export function RecordsPage() {
                     </div>
                     <h4 className="mt-3 text-lg font-semibold text-slate-950 dark:text-white">{supportCase.title}</h4>
                     <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">{supportCase.source_text}</p>
+                    <p className="mt-3 text-xs text-slate-500">Created: {formatDate(supportCase.created_at)}</p>
                     <p className="mt-3 text-xs text-slate-500">Case ID: {supportCase.id}</p>
                   </button>
                   <button
@@ -396,15 +415,15 @@ export function RecordsPage() {
               <h3 className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">Saved context and handoff notes</h3>
             </div>
             <span className="rounded-full border border-black/10 px-3 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-300">
-              {state?.notes.length || 0} notes
+              {sortedNotes.length} notes
             </span>
           </div>
 
           <div className="mt-6 space-y-3">
-            {(state?.notes || []).length === 0 ? (
+            {sortedNotes.length === 0 ? (
               <p className="text-sm text-slate-400">No notes saved.</p>
             ) : (
-              filteredNotes.map((note) => (
+              sortedNotes.map((note) => (
                 <RecordCard
                   key={note.id}
                   title={note.title}
