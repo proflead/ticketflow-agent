@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from ticketflow_shared.schemas import (
     DeleteResponse,
     StateResponse,
+    SupportCaseDetailResponse,
     TaskAssignmentUpdate,
     TaskRead,
     TaskUpdate,
@@ -34,6 +35,15 @@ async def run_workflow(payload: WorkflowRunRequest) -> WorkflowRunResponse:
 async def get_state() -> StateResponse:
     engine = WorkflowEngine(get_settings())
     return engine.get_state()
+
+
+@router.get("/api/cases/{case_id}", response_model=SupportCaseDetailResponse)
+async def get_case_detail(case_id: str) -> SupportCaseDetailResponse:
+    engine = WorkflowEngine(get_settings())
+    try:
+        return engine.get_case_detail(case_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.patch("/api/tasks/{task_id}/assignment", response_model=TaskRead)

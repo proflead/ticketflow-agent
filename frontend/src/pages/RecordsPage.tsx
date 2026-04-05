@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { deleteCase, deleteTask, fetchState } from "../api";
 import { StateResponse, SupportCase, Task } from "../types";
 
@@ -6,7 +7,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-1">
       <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</span>
-      <span className="text-sm text-slate-200">{value}</span>
+      <span className="text-sm text-slate-700 dark:text-slate-200">{value}</span>
     </div>
   );
 }
@@ -78,8 +79,8 @@ export function RecordsPage() {
   const sortedTasks = useMemo(
     () =>
       [...filteredTasks].sort((a, b) => {
-        const aTime = a.due_at ? new Date(a.due_at).getTime() : new Date(a.created_at).getTime();
-        const bTime = b.due_at ? new Date(b.due_at).getTime() : new Date(b.created_at).getTime();
+        const aTime = a.due_at ? new Date(a.due_at).getTime() : new Date(a.created_at || 0).getTime();
+        const bTime = b.due_at ? new Date(b.due_at).getTime() : new Date(b.created_at || 0).getTime();
         return bTime - aTime;
       }),
     [filteredTasks]
@@ -93,7 +94,7 @@ export function RecordsPage() {
   const sortedCases = useMemo(
     () =>
       [...(state?.cases || [])].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
       ),
     [state?.cases]
   );
@@ -147,7 +148,7 @@ export function RecordsPage() {
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Show tasks across every support case.</p>
             </button>
             {(state?.cases || []).length === 0 ? (
-              <p className="text-sm text-slate-400">No support cases saved yet.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">No support cases saved yet.</p>
             ) : (
               sortedCases.map((supportCase: SupportCase) => (
                 <div
@@ -173,8 +174,15 @@ export function RecordsPage() {
                       </div>
                       <h4 className="mt-3 text-lg font-semibold text-slate-950 dark:text-white">{supportCase.title}</h4>
                       <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">{supportCase.source_text}</p>
-                      <p className="mt-3 text-xs text-slate-500">Created: {formatDate(supportCase.created_at)}</p>
-                      <p className="mt-3 text-xs text-slate-500">Case ID: {supportCase.id}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Created: {formatDate(supportCase.created_at)}</span>
+                        <Link
+                          to={`/cases/${supportCase.id}`}
+                          className="rounded-full border border-black/10 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                        >
+                          Open case details
+                        </Link>
+                      </div>
                     </button>
                     <button
                       type="button"
@@ -185,7 +193,7 @@ export function RecordsPage() {
                         }
                         await refresh();
                       }}
-                      className="rounded-full border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-300 hover:bg-rose-400/10"
+                      className="rounded-full border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-600 hover:bg-rose-400/10 dark:text-rose-300"
                     >
                       Delete case
                     </button>
@@ -230,7 +238,7 @@ export function RecordsPage() {
 
           <div className="mt-6 space-y-3">
             {sortedTasks.length === 0 ? (
-              <p className="text-sm text-slate-400">No tasks linked to this view yet.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">No tasks linked to this view yet.</p>
             ) : (
               sortedTasks.map((task) => (
                 <RecordCard

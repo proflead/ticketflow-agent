@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { deleteCustomer, fetchState } from "../api";
 import { Customer, StateResponse } from "../types";
 
@@ -11,6 +12,7 @@ export function CustomersPage() {
   const [state, setState] = useState<StateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   async function refresh() {
     try {
@@ -24,6 +26,15 @@ export function CustomersPage() {
   useEffect(() => {
     void refresh();
   }, []);
+
+  const filteredCustomers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const customers = [...(state?.customers || [])];
+    if (!query) return customers;
+    return customers.filter((customer) =>
+      [customer.name, customer.email, customer.phone].some((value) => value?.toLowerCase().includes(query))
+    );
+  }, [search, state?.customers]);
 
   const selectedCustomer = useMemo(
     () => (state?.customers || []).find((customer) => customer.id === selectedCustomerId) || null,
@@ -63,6 +74,14 @@ export function CustomersPage() {
           </button>
         </div>
         {error ? <p className="mt-4 text-sm text-rose-500 dark:text-rose-300">{error}</p> : null}
+        <div className="mt-6 max-w-md">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by customer name, email, or phone"
+            className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-slate-950 placeholder:text-slate-400 dark:border-white/10 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
+          />
+        </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[380px_1fr]">
@@ -76,9 +95,12 @@ export function CustomersPage() {
 
           <div className="mt-6 space-y-3">
             {(state?.customers || []).length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No customers captured yet.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">No customers match this search yet.</p>
             ) : (
-              state?.customers.map((customer: Customer) => (
+              filteredCustomers.map((customer: Customer) => {
+                const linkedCases = (state?.cases || []).filter((supportCase) => supportCase.customer_id === customer.id);
+                const linkedTasks = (state?.tasks || []).filter((task) => task.customer_id === customer.id);
+                return (
                 <div
                   key={customer.id}
                   className={`rounded-2xl border p-4 transition ${
@@ -92,6 +114,14 @@ export function CustomersPage() {
                       <p className="text-base font-semibold text-slate-950 dark:text-white">{customer.name || customer.email || customer.phone || "Unknown customer"}</p>
                       <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{customer.email || "No email saved"}</p>
                       <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{customer.phone || "No phone saved"}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                          {linkedCases.length} case{linkedCases.length === 1 ? "" : "s"}
+                        </span>
+                        <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                          {linkedTasks.length} task{linkedTasks.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
                     </button>
                     <button
                       type="button"
@@ -102,13 +132,13 @@ export function CustomersPage() {
                         }
                         await refresh();
                       }}
-                      className="rounded-full border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-300 hover:bg-rose-400/10"
+                      className="rounded-full border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-600 hover:bg-rose-400/10 dark:text-rose-300"
                     >
                       Delete
                     </button>
                   </div>
                 </div>
-              ))
+              )})
             )}
           </div>
         </div>
@@ -136,6 +166,14 @@ export function CustomersPage() {
                     <p className="mt-2 text-sm text-slate-950 dark:text-white">{formatDate(selectedCustomer.created_at)}</p>
                   </div>
                 </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    {customerCases.length} case{customerCases.length === 1 ? "" : "s"}
+                  </span>
+                  <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    {customerTasks.length} task{customerTasks.length === 1 ? "" : "s"}
+                  </span>
+                </div>
               </div>
 
               <div>
@@ -146,7 +184,15 @@ export function CustomersPage() {
                   ) : (
                     customerCases.map((supportCase) => (
                       <div key={supportCase.id} className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
-                        <p className="text-base font-semibold text-slate-950 dark:text-white">{supportCase.title}</p>
+                        <div className="flex items-start justify-between gap-4">
+                          <p className="text-base font-semibold text-slate-950 dark:text-white">{supportCase.title}</p>
+                          <Link
+                            to={`/cases/${supportCase.id}`}
+                            className="rounded-full border border-black/10 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                          >
+                            Open case
+                          </Link>
+                        </div>
                         <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">{supportCase.source_text}</p>
                       </div>
                     ))

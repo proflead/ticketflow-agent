@@ -1,4 +1,4 @@
-import { DeleteResponse, StateResponse, WorkflowResponse } from "./types";
+import { CaseDetailResponse, DeleteResponse, StateResponse, WorkflowResponse } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -20,6 +20,14 @@ export async function fetchState(): Promise<StateResponse> {
   const response = await fetch(`${API_BASE}/api/state`);
   if (!response.ok) {
     throw new Error(`State request failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchCaseDetail(id: string): Promise<CaseDetailResponse> {
+  const response = await fetch(`${API_BASE}/api/cases/${id}`);
+  if (!response.ok) {
+    throw new Error(`Case detail request failed with status ${response.status}`);
   }
   return response.json();
 }
@@ -74,7 +82,10 @@ export async function updateTaskAssignment(id: string, assigned_member: string |
   return response.json();
 }
 
-export async function updateTask(id: string, payload: { title: string; description: string | null; priority: string; due_at: string | null }) {
+export async function updateTask(
+  id: string,
+  payload: { title: string; description: string | null; priority: string; status: string; due_at: string | null }
+) {
   const response = await fetch(`${API_BASE}/api/tasks/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

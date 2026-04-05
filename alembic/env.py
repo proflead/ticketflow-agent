@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from logging.config import fileConfig
 
@@ -8,10 +9,18 @@ from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SHARED_ROOT = REPO_ROOT / "shared"
+
+for path in (REPO_ROOT, SHARED_ROOT):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
+
 from ticketflow_shared.database import Base
 from ticketflow_shared import models  # noqa: F401
 
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+load_dotenv(REPO_ROOT / ".env")
 
 config = context.config
 

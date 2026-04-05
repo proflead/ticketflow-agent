@@ -7,6 +7,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { RunsPage } from "./pages/RunsPage";
 import { TasksPage } from "./pages/TasksPage";
 import { CustomersPage } from "./pages/CustomersPage";
+import { CaseDetailsPage } from "./pages/CaseDetailsPage";
 
 function SunIcon() {
   return (
@@ -104,6 +105,7 @@ export default function App() {
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/records" element={<RecordsPage />} />
+          <Route path="/cases/:caseId" element={<CaseDetailsPage />} />
           <Route path="/runs" element={<RunsPage />} />
           <Route path="/login" element={<LoginPage />} />
         </Routes>

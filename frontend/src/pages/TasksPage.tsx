@@ -4,10 +4,21 @@ import { StateResponse, Task } from "../types";
 
 const TEAM_MEMBERS = [
   { name: "Lena Park", team: "Identity & Access" },
+  { name: "Jordan Miles", team: "Identity & Access" },
   { name: "Marcus Chen", team: "Billing" },
+  { name: "Priya Nair", team: "Billing" },
   { name: "Ava Patel", team: "Communications" },
+  { name: "Derek Shaw", team: "Communications" },
   { name: "Noah Kim", team: "Customer Success" },
+  { name: "Mina Lopez", team: "Customer Success" },
   { name: "Sofia Rivera", team: "Engineering" },
+  { name: "Ethan Brooks", team: "Engineering" },
+  { name: "Riley Grant", team: "Support Operations" },
+  { name: "Tara Singh", team: "Support Operations" },
+  { name: "Owen Clarke", team: "Platform Engineering" },
+  { name: "Yuna Park", team: "Platform Engineering" },
+  { name: "Chloe Martin", team: "Frontend Engineering" },
+  { name: "Leo Bennett", team: "Frontend Engineering" },
 ];
 
 function formatDate(value?: string | null) {
@@ -29,6 +40,7 @@ export function TasksPage() {
     title: "",
     description: "",
     priority: "medium",
+    status: "open",
     due_at: "",
   });
 
@@ -68,6 +80,7 @@ export function TasksPage() {
       title: task.title,
       description: task.description || "",
       priority: task.priority || "medium",
+      status: task.status || "open",
       due_at: task.due_at ? new Date(task.due_at).toISOString().slice(0, 16) : "",
     });
   }
@@ -77,6 +90,7 @@ export function TasksPage() {
       title: editForm.title,
       description: editForm.description || null,
       priority: editForm.priority,
+      status: editForm.status,
       due_at: editForm.due_at ? new Date(editForm.due_at).toISOString() : null,
     });
     setEditingTaskId(null);
@@ -154,6 +168,15 @@ export function TasksPage() {
                     <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                       {task.priority} priority
                     </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        task.status === "completed"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200"
+                      }`}
+                    >
+                      {task.status}
+                    </span>
                     {task.issue_category ? (
                       <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                         {task.issue_category}
@@ -186,6 +209,16 @@ export function TasksPage() {
                             <option value="medium">medium</option>
                             <option value="high">high</option>
                           </select>
+                          <select
+                            value={editForm.status}
+                            onChange={(event) => setEditForm((current) => ({ ...current, status: event.target.value }))}
+                            className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-950 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                          >
+                            <option value="open">open</option>
+                            <option value="completed">completed</option>
+                          </select>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
                           <input
                             type="datetime-local"
                             value={editForm.due_at}

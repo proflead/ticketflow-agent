@@ -12,3 +12,5 @@ backend/frontend_dist/
 dist/
 build/
 .DS_Store
+cloud-run-deploy.md
+cloud-shell-deploy.local.md

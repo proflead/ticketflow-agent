@@ -82,6 +82,13 @@ export type WorkflowResponse = {
   errors: string[];
 };
 
+export type CaseDetailResponse = {
+  case: SupportCase;
+  customer?: Customer | null;
+  tasks: Task[];
+  workflow_runs: StateResponse["workflow_runs"];
+};
+
 export type StateResponse = {
   customers: Customer[];
   cases: SupportCase[];

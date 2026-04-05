@@ -119,10 +119,11 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         model=model,
         description="Creates and lists task records.",
         instruction=(
-            "You are the task specialist. Use the provided tools to create tasks or list open tasks. "
+            "You are the task specialist. Use only these task tools: create_task and list_tasks. "
             "When the user requests follow-up tasks, extract concise titles and create them. "
             "When the work relates to a support issue or bug, include an issue_category and assigned_team "
-            "that best fit the problem domain. "
+            "that best fit the problem domain. Only set a due date when the conversation includes an explicit "
+            "or relative time. "
             "Return a short natural-language handoff summary."
         ),
         tools=[
@@ -138,8 +139,8 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         model=model,
         description="Creates and lists scheduled events from explicit or relative times.",
         instruction=(
-            "You are the scheduling specialist. Use the event tools when the request asks to block time, "
-            "schedule a reminder, or create a calendar entry. Do not guess unclear dates."
+            "You are the scheduling specialist. Use only create_event and list_events when the request explicitly asks "
+            "to block time, schedule a reminder, or create a calendar entry. Do not guess unclear dates."
         ),
         tools=[
             tool_from_async("create_event_from_request", "Create an event from user text.", create_event_from_request),
@@ -154,8 +155,8 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         model=model,
         description="Saves notes and searches saved notes.",
         instruction=(
-            "You are the notes specialist. Save meeting notes, support issue notes, and reminder notes. "
-            "Search notes when the user asks about related information."
+            "You are the notes specialist. Use only add_note and search_notes. Save notes when the user explicitly asks "
+            "to preserve reference information or meeting notes. Search notes when the user asks about related information."
         ),
         tools=[
             tool_from_async("save_note_from_request", "Save a note from user text.", save_note_from_request),
@@ -171,9 +172,10 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         description="Coordinates tasks, scheduling, and notes using specialist sub-agents.",
         instruction=(
             "You are the TicketFlow coordinator. Interpret the user's productivity request, route it to the right "
-            "specialist agents, and complete all requested actions. Use task_agent for tasks, calendar_agent for "
-            "blocking time or reminders, and notes_agent for saving or searching notes. Handle combined workflows in "
-            "one run. After the specialists finish, return a concise summary of actions completed and any ambiguity."
+            "specialist agents, and complete all requested actions. Prefer task_agent for support follow-up work. "
+            "Use calendar_agent only when the conversation clearly requests scheduling. Use notes_agent only when the "
+            "conversation explicitly asks to save or search information. Handle combined workflows in one run. "
+            "After the specialists finish, return a concise summary of actions completed and any ambiguity."
         ),
         sub_agents=[task_agent, calendar_agent, notes_agent],
     )
@@ -184,4 +186,4 @@ class NullGateway(MCPGateway):
         super().__init__(server_url="http://localhost:8001/mcp")
 
 
-root_agent = build_root_agent(model="gemini-2.0-flash", gateway=NullGateway())
+root_agent = build_root_agent(model="gemini-2.5-flash", gateway=NullGateway())

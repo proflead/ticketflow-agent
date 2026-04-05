@@ -47,6 +47,7 @@ class TaskUpdate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
     priority: Literal["low", "medium", "high"] = "medium"
+    status: Literal["open", "completed"] = "open"
     due_at: datetime | None = None
 
 
@@ -182,6 +183,13 @@ class StateResponse(BaseModel):
     events: list[EventRead]
     notes: list[NoteRead]
     workflow_runs: list[WorkflowRunRead]
+
+
+class SupportCaseDetailResponse(BaseModel):
+    case: SupportCaseRead
+    customer: CustomerRead | None = None
+    tasks: list[TaskRead] = Field(default_factory=list)
+    workflow_runs: list[WorkflowRunRead] = Field(default_factory=list)
 
 
 class DeleteResponse(BaseModel):

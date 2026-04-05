@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import Client, types
+from google.genai.errors import ClientError
 from sqlalchemy import desc, or_, select
 
 from ticketflow_shared.models import Customer, Event, Note, SupportCase, Task, WorkflowRun, WorkflowStatus
@@ -20,6 +21,7 @@ from ticketflow_shared.schemas import (
     NoteCreate,
     NoteRead,
     StateResponse,
+    SupportCaseDetailResponse,
     SupportCaseRead,
     TaskAssignmentUpdate,
     TaskCreate,
@@ -332,16 +334,12 @@ class WorkflowEngine:
         parts = []
         if gateway.created_tasks:
             parts.append(f"Created {len(gateway.created_tasks)} task(s)")
+        if gateway.listed_tasks:
+            parts.append(f"returned {len(gateway.listed_tasks)} open task(s)")
         if gateway.created_events:
             parts.append(f"scheduled {len(gateway.created_events)} event(s)")
         if gateway.created_notes:
             parts.append(f"saved {len(gateway.created_notes)} note(s)")
-        if gateway.listed_tasks:
-            parts.append(f"returned {len(gateway.listed_tasks)} open task(s)")
-        if gateway.listed_events:
-            parts.append(f"returned {len(gateway.listed_events)} event(s)")
-        if gateway.searched_notes:
-            parts.append(f"found {len(gateway.searched_notes)} note(s)")
         return ", ".join(parts).capitalize() + "." if parts else "No actions were taken."
 
     def _looks_like_issue(self, lower_text: str) -> bool:
@@ -496,6 +494,30 @@ class WorkflowEngine:
         if not self._can_use_adk():
             return {}
 
+        extraction_prompt = (
+            "Extract structured support intake data from this conversation. "
+            "Return JSON only with this exact shape: "
+            '{"summary":"short summary","customer":{"name":null,"email":null,"phone":null},"tasks":[{"title":"task title"}]}. '
+            "Only extract contact details that are explicitly present or strongly implied. "
+            "Do not invent customer information.\n\nConversation:\n"
+            f"{prompt}"
+        )
+
+        try:
+            return await self._generate_intake_with_primary_client(extraction_prompt)
+        except ClientError as exc:
+            if self._should_retry_intake_without_vertex(exc):
+                try:
+                    return await self._generate_intake_with_api_key(extraction_prompt)
+                except Exception:
+                    logger.exception("AI intake extraction API-key fallback failed after Vertex error.")
+            logger.exception("AI intake extraction failed; falling back to deterministic extraction.")
+            return {}
+        except Exception:
+            logger.exception("AI intake extraction failed; falling back to deterministic extraction.")
+            return {}
+
+    async def _generate_intake_with_primary_client(self, extraction_prompt: str) -> dict[str, object]:
         client_kwargs: dict[str, object] = {}
         if self.settings.google_genai_use_vertexai:
             client_kwargs.update(
@@ -510,30 +532,44 @@ class WorkflowEngine:
         else:
             return {}
 
-        extraction_prompt = (
-            "Extract structured support intake data from this conversation. "
-            "Return JSON only with this exact shape: "
-            '{"summary":"short summary","customer":{"name":null,"email":null,"phone":null},"tasks":[{"title":"task title"}]}. '
-            "Only extract contact details that are explicitly present or strongly implied. "
-            "Do not invent customer information.\n\nConversation:\n"
-            f"{prompt}"
+        return await self._generate_intake_with_client_kwargs(client_kwargs, extraction_prompt)
+
+    async def _generate_intake_with_api_key(self, extraction_prompt: str) -> dict[str, object]:
+        if not self.settings.google_api_key:
+            return {}
+
+        logger.warning(
+            "Retrying AI intake extraction with direct Gemini API because Vertex model %s is unavailable.",
+            self.settings.gemini_model,
+        )
+        return await self._generate_intake_with_client_kwargs(
+            {"api_key": self.settings.google_api_key},
+            extraction_prompt,
         )
 
-        try:
-            client = Client(**client_kwargs)
-            response = await client.aio.models.generate_content(
-                model=self.settings.gemini_model,
-                contents=extraction_prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json"),
-            )
-            raw_text = (response.text or "").strip()
-            if not raw_text:
-                return {}
-            parsed = json.loads(raw_text)
-            return parsed if isinstance(parsed, dict) else {}
-        except Exception:
-            logger.exception("AI intake extraction failed; falling back to deterministic extraction.")
+    async def _generate_intake_with_client_kwargs(
+        self, client_kwargs: dict[str, object], extraction_prompt: str
+    ) -> dict[str, object]:
+        client = Client(**client_kwargs)
+        response = await client.aio.models.generate_content(
+            model=self.settings.gemini_model,
+            contents=extraction_prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        raw_text = (response.text or "").strip()
+        if not raw_text:
             return {}
+        parsed = json.loads(raw_text)
+        return parsed if isinstance(parsed, dict) else {}
+
+    def _should_retry_intake_without_vertex(self, exc: ClientError) -> bool:
+        if not (self.settings.google_genai_use_vertexai and self.settings.google_api_key):
+            return False
+
+        error_text = str(exc).lower()
+        return exc.code == 404 and (
+            "publisher model" in error_text or "not found" in error_text or "does not have access" in error_text
+        )
 
     def get_state(self) -> StateResponse:
         with get_session() as session:
@@ -587,10 +623,49 @@ class WorkflowEngine:
             task.title = payload.title
             task.description = payload.description
             task.priority = payload.priority
+            task.status = payload.status
             task.due_at = payload.due_at
             session.commit()
             session.refresh(task)
             return TaskRead.model_validate(task)
+
+    def get_case_detail(self, case_id: str) -> SupportCaseDetailResponse:
+        with get_session() as session:
+            support_case = session.get(SupportCase, uuid.UUID(case_id))
+            if support_case is None:
+                raise ValueError("Support case not found.")
+
+            customer = session.get(Customer, support_case.customer_id) if support_case.customer_id else None
+            tasks = session.scalars(
+                select(Task).where(Task.case_id == support_case.id).order_by(desc(Task.created_at))
+            ).all()
+            runs = session.scalars(
+                select(WorkflowRun).where(WorkflowRun.case_id == support_case.id).order_by(desc(WorkflowRun.created_at))
+            ).all()
+
+            return SupportCaseDetailResponse(
+                case=SupportCaseRead.model_validate(support_case),
+                customer=CustomerRead.model_validate(customer) if customer else None,
+                tasks=[TaskRead.model_validate(task) for task in tasks],
+                workflow_runs=[
+                    WorkflowRunRead.model_validate(
+                        {
+                            "id": run.id,
+                            "case_id": run.case_id,
+                            "request_text": run.request_text,
+                            "status": run.status.value if hasattr(run.status, "value") else run.status,
+                            "summary": run.summary,
+                            "engine_mode": (run.artifacts_json or {}).get("engine_mode"),
+                            "steps_json": run.steps_json,
+                            "artifacts_json": run.artifacts_json,
+                            "error_message": run.error_message,
+                            "created_at": run.created_at,
+                            "completed_at": run.completed_at,
+                        }
+                    )
+                    for run in runs
+                ],
+            )
 
     def delete_task(self, task_id: str) -> DeleteResponse:
         with get_session() as session:
