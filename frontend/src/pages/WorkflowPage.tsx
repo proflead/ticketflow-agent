@@ -3,9 +3,23 @@ import { runWorkflow } from "../api";
 import { WorkflowResponse } from "../types";
 
 const examplePrompts = [
-  "Support issue: New users cannot reset their password after onboarding. Classify the issue, assign it to the right team, create a follow-up task, schedule a reminder tomorrow at 9 AM, and save a note with the customer impact.",
-  "Support issue: The customer stopped receiving billing emails after changing their account owner. Assign the right team, create a task to investigate, and save a note with the issue summary.",
-  "Save these meeting notes and create follow-up tasks: Action item: send pricing recap today. Action item: confirm implementation timeline. Action item: schedule a reminder tomorrow at 10 AM.",
+  `Live chat transcript:
+Customer: Hi, we onboarded three new teammates today and none of them can reset their password.
+Customer: My name is Sarah Lee. You can reach me at sarah.lee@northstar.io or +1 415 555 0101.
+Agent: Thanks, I am checking. Did they get the welcome email?
+Customer: Yes, but the reset link says permission denied.
+Agent: Understood. I will escalate this.`,
+  `Live chat transcript:
+Customer: Since we changed our billing owner, invoices stopped arriving by email.
+Customer: This is Michael Torres from BrightOps, email michael@brightops.com.
+Agent: Are renewal reminders still coming through?
+Customer: No, all billing emails stopped after the ownership change.
+Agent: Thanks, I will open a case and ask billing to review it.`,
+  `Live chat transcript:
+Customer: We need the onboarding checklist before tomorrow's implementation call.
+Agent: I can help with that. Anything else to prepare?
+Customer: Please send pricing recap, confirm the implementation timeline, and remind me tomorrow at 10 AM.
+Agent: Noted.`,
 ];
 
 function LoadingResult() {
@@ -45,12 +59,16 @@ export function WorkflowPage() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
+    <div className="space-y-6">
       <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-xl shadow-black/5 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/30">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Run Workflow</p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">Tell the agent what happened and what needs to happen next.</h2>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">Paste the live chat conversation and let the agent turn it into a case.</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+              TicketFlow stores the full conversation inside the case, writes a summary, classifies the issue,
+              assigns the owning team, and creates the follow-up work under that case.
+            </p>
           </div>
           <span className="rounded-full border border-black/10 px-3 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-300">
             Gemini visible in result
@@ -65,14 +83,14 @@ export function WorkflowPage() {
             className="w-full rounded-2xl border border-black/10 bg-white p-4 text-sm leading-6 text-slate-950 outline-none ring-0 placeholder:text-slate-400 dark:border-white/10 dark:bg-slate-950/80 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
           <div className="flex flex-wrap gap-2">
-            {examplePrompts.map((example) => (
+            {examplePrompts.map((example, index) => (
               <button
                 key={example}
                 type="button"
                 onClick={() => setPrompt(example)}
                 className="rounded-full border border-black/10 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
               >
-                Use example
+                {index === 0 ? "Password reset chat" : index === 1 ? "Billing email chat" : "Onboarding prep chat"}
               </button>
             ))}
           </div>
@@ -133,6 +151,33 @@ export function WorkflowPage() {
               </div>
             ) : null}
 
+            {result.customer ? (
+              <div className="rounded-2xl border border-black/10 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/60">
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-white">Customer identified</h3>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Name</p>
+                    <p className="mt-2 text-sm font-medium text-slate-950 dark:text-white">{result.customer.name || "Not captured"}</p>
+                  </div>
+                  <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Email</p>
+                    <p className="mt-2 text-sm font-medium text-slate-950 dark:text-white">{result.customer.email || "Not captured"}</p>
+                  </div>
+                  <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Phone</p>
+                    <p className="mt-2 text-sm font-medium text-slate-950 dark:text-white">{result.customer.phone || "Not captured"}</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {result.case_summary ? (
+              <div className="rounded-2xl border border-black/10 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/60">
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-white">Conversation summary</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-300">{result.case_summary}</p>
+              </div>
+            ) : null}
+
             <div className="rounded-2xl border border-black/10 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/60">
               <h3 className="text-lg font-semibold text-slate-950 dark:text-white">Bug classification and team assignment</h3>
               {Object.keys(result.triage).length === 0 ? (
@@ -153,6 +198,21 @@ export function WorkflowPage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-black/10 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/60">
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-white">Tasks</h3>
+                <p className="mt-2 text-3xl font-semibold text-slate-950 dark:text-white">{result.tasks.length}</p>
+              </div>
+              <div className="rounded-2xl border border-black/10 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/60">
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-white">Events</h3>
+                <p className="mt-2 text-3xl font-semibold text-slate-950 dark:text-white">{result.events.length}</p>
+              </div>
+              <div className="rounded-2xl border border-black/10 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/60">
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-white">Notes</h3>
+                <p className="mt-2 text-3xl font-semibold text-slate-950 dark:text-white">{result.notes.length}</p>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-black/10 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/60">

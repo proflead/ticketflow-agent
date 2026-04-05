@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { HomePage } from "./pages/HomePage";
-import { AboutPage } from "./pages/AboutPage";
 import { RecordsPage } from "./pages/RecordsPage";
 import { WorkflowPage } from "./pages/WorkflowPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RunsPage } from "./pages/RunsPage";
+import { TasksPage } from "./pages/TasksPage";
+import { CustomersPage } from "./pages/CustomersPage";
 
 function SunIcon() {
   return (
@@ -72,10 +73,11 @@ export default function App() {
           </div>
           <nav className="flex flex-wrap items-center gap-2">
             <NavItem to="/" label="Home" />
-            <NavItem to="/about" label="About" />
             <NavItem to="/workflow" label="Run Workflow" />
-            <NavItem to="/records" label="Records" />
-            <NavItem to="/runs" label="Workflow Runs" />
+            <NavItem to="/tasks" label="Tasks" />
+            <NavItem to="/customers" label="Customers" />
+            <NavItem to="/records" label="Support Cases" />
+            <NavItem to="/runs" label="Run Logs" />
             <NavLink
               to="/login"
               className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100 dark:border-white/15 dark:text-white dark:hover:bg-white/10"
@@ -98,8 +100,9 @@ export default function App() {
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/about" element={<AboutPage />} />
           <Route path="/workflow" element={<WorkflowPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
           <Route path="/records" element={<RecordsPage />} />
           <Route path="/runs" element={<RunsPage />} />
           <Route path="/login" element={<LoginPage />} />

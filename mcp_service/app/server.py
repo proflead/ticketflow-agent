@@ -19,12 +19,14 @@ def create_task(task: TaskCreate) -> dict:
     with get_session() as session:
         db_task = Task(
             case_id=task.case_id,
+            customer_id=task.customer_id,
             title=task.title,
             description=task.description,
             priority=task.priority,
             due_at=task.due_at,
             issue_category=task.issue_category,
             assigned_team=task.assigned_team,
+            assigned_member=task.assigned_member,
             source_text=task.source_text,
         )
         session.add(db_task)

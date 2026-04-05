@@ -14,6 +14,7 @@ from ticketflow_shared.schemas import EventCreate, EventRead, NoteCreate, NoteRe
 class MCPGateway:
     server_url: str
     active_case_id: UUID | None = None
+    active_customer_id: UUID | None = None
     steps: list[WorkflowStep] = field(default_factory=list)
     created_tasks: list[TaskRead] = field(default_factory=list)
     created_events: list[EventRead] = field(default_factory=list)
@@ -43,6 +44,8 @@ class MCPGateway:
     async def create_task(self, agent: str, task: TaskCreate) -> TaskRead:
         if self.active_case_id and task.case_id is None:
             task = task.model_copy(update={"case_id": self.active_case_id})
+        if self.active_customer_id and task.customer_id is None:
+            task = task.model_copy(update={"customer_id": self.active_customer_id})
         data = await self._call(agent, "create_task", {"task": task.model_dump(mode="json")})
         task_out = TaskRead.model_validate(data["task"])
         self.created_tasks.append(task_out)

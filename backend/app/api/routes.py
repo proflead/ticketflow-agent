@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from ticketflow_shared.schemas import DeleteResponse, StateResponse, WorkflowRunRequest, WorkflowRunResponse
+from ticketflow_shared.schemas import (
+    DeleteResponse,
+    StateResponse,
+    TaskAssignmentUpdate,
+    TaskRead,
+    TaskUpdate,
+    WorkflowRunRequest,
+    WorkflowRunResponse,
+)
 
 from app.config import get_settings
 from app.services.workflow_engine import WorkflowEngine
@@ -26,6 +34,24 @@ async def run_workflow(payload: WorkflowRunRequest) -> WorkflowRunResponse:
 async def get_state() -> StateResponse:
     engine = WorkflowEngine(get_settings())
     return engine.get_state()
+
+
+@router.patch("/api/tasks/{task_id}/assignment", response_model=TaskRead)
+async def update_task_assignment(task_id: str, payload: TaskAssignmentUpdate) -> TaskRead:
+    engine = WorkflowEngine(get_settings())
+    try:
+        return engine.update_task_assignment(task_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/api/tasks/{task_id}", response_model=TaskRead)
+async def update_task(task_id: str, payload: TaskUpdate) -> TaskRead:
+    engine = WorkflowEngine(get_settings())
+    try:
+        return engine.update_task(task_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.delete("/api/tasks/{task_id}", response_model=DeleteResponse)
@@ -69,5 +95,14 @@ async def delete_case(case_id: str) -> DeleteResponse:
     engine = WorkflowEngine(get_settings())
     try:
         return engine.delete_case(case_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/api/customers/{customer_id}", response_model=DeleteResponse)
+async def delete_customer(customer_id: str) -> DeleteResponse:
+    engine = WorkflowEngine(get_settings())
+    try:
+        return engine.delete_customer(customer_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

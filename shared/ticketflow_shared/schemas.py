@@ -9,12 +9,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class TaskCreate(BaseModel):
     case_id: UUID | None = None
+    customer_id: UUID | None = None
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
     priority: Literal["low", "medium", "high"] = "medium"
     due_at: datetime | None = None
     issue_category: str | None = None
     assigned_team: str | None = None
+    assigned_member: str | None = None
     source_text: str | None = None
 
 
@@ -23,6 +25,7 @@ class TaskRead(BaseModel):
 
     id: UUID
     case_id: UUID | None
+    customer_id: UUID | None
     title: str
     description: str | None
     priority: str
@@ -30,9 +33,21 @@ class TaskRead(BaseModel):
     due_at: datetime | None
     issue_category: str | None
     assigned_team: str | None
+    assigned_member: str | None
     source_text: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class TaskAssignmentUpdate(BaseModel):
+    assigned_member: str | None = None
+
+
+class TaskUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    priority: Literal["low", "medium", "high"] = "medium"
+    due_at: datetime | None = None
 
 
 class EventCreate(BaseModel):
@@ -92,12 +107,24 @@ class SupportCaseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    customer_id: UUID | None
     title: str
     source_text: str
     issue_category: str | None
     assigned_team: str | None
     severity: str | None
     status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class CustomerRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str | None
+    email: str | None
+    phone: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -110,9 +137,11 @@ class WorkflowArtifacts(BaseModel):
 
 class WorkflowResult(BaseModel):
     summary: str
+    case_summary: str | None = None
     steps: list[WorkflowStep] = Field(default_factory=list)
     triage: dict[str, Any] = Field(default_factory=dict)
     case: SupportCaseRead | None = None
+    customer: CustomerRead | None = None
     tasks: list[TaskRead] = Field(default_factory=list)
     events: list[EventRead] = Field(default_factory=list)
     notes: list[NoteRead] = Field(default_factory=list)
@@ -148,6 +177,7 @@ class WorkflowRunRead(BaseModel):
 
 class StateResponse(BaseModel):
     cases: list[SupportCaseRead]
+    customers: list[CustomerRead]
     tasks: list[TaskRead]
     events: list[EventRead]
     notes: list[NoteRead]
@@ -157,4 +187,4 @@ class StateResponse(BaseModel):
 class DeleteResponse(BaseModel):
     ok: bool = True
     deleted_id: UUID
-    resource: Literal["task", "event", "note", "workflow_run", "support_case"]
+    resource: Literal["task", "event", "note", "workflow_run", "support_case", "customer"]

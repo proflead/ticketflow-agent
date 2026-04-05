@@ -55,3 +55,35 @@ export function deleteWorkflowRun(id: string) {
 export function deleteCase(id: string) {
   return deleteResource(`/api/cases/${id}`);
 }
+
+export function deleteCustomer(id: string) {
+  return deleteResource(`/api/customers/${id}`);
+}
+
+export async function updateTaskAssignment(id: string, assigned_member: string | null) {
+  const response = await fetch(`${API_BASE}/api/tasks/${id}/assignment`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assigned_member }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Task assignment request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function updateTask(id: string, payload: { title: string; description: string | null; priority: string; due_at: string | null }) {
+  const response = await fetch(`${API_BASE}/api/tasks/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Task update request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}

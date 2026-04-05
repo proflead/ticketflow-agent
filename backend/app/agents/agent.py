@@ -17,16 +17,20 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         title: str | None = None,
         priority: str = "medium",
         description: str | None = None,
+        due_at_iso: str | None = None,
+        due_at: str | None = None,
         issue_category: str | None = None,
         assigned_team: str | None = None,
     ) -> dict:
         source_text = request_text or description or title
         if not source_text:
             return {"ok": False, "error": "A task needs request_text, description, or title."}
+        due_value = due_at_iso or due_at
         task = TaskCreate(
             title=title or derive_task_title(source_text),
             description=description or source_text,
             priority=priority,
+            due_at=datetime.fromisoformat(due_value) if due_value else None,
             issue_category=issue_category,
             assigned_team=assigned_team,
             source_text=source_text,
@@ -123,7 +127,9 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         ),
         tools=[
             tool_from_async("create_task_from_request", "Create a task from user text.", create_task_from_request),
+            tool_from_async("create_task", "Create a task from user text.", create_task_from_request),
             tool_from_async("list_open_tasks", "List open tasks.", list_open_tasks),
+            tool_from_async("list_tasks", "List open tasks.", list_open_tasks),
         ],
     )
 
@@ -137,7 +143,9 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         ),
         tools=[
             tool_from_async("create_event_from_request", "Create an event from user text.", create_event_from_request),
+            tool_from_async("create_event", "Create an event from user text.", create_event_from_request),
             tool_from_async("list_recent_events", "List recent events.", list_recent_events),
+            tool_from_async("list_events", "List recent events.", list_recent_events),
         ],
     )
 
@@ -151,7 +159,9 @@ def build_root_agent(model: str, gateway: MCPGateway) -> LlmAgent:
         ),
         tools=[
             tool_from_async("save_note_from_request", "Save a note from user text.", save_note_from_request),
+            tool_from_async("add_note", "Save a note from user text.", save_note_from_request),
             tool_from_async("search_existing_notes", "Search notes by query.", search_existing_notes),
+            tool_from_async("search_notes", "Search notes by query.", search_existing_notes),
         ],
     )
 

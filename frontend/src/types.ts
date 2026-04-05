@@ -8,6 +8,7 @@ export type WorkflowStep = {
 
 export type SupportCase = {
   id: string;
+  customer_id?: string | null;
   title: string;
   source_text: string;
   issue_category?: string | null;
@@ -21,6 +22,7 @@ export type SupportCase = {
 export type Task = {
   id: string;
   case_id?: string | null;
+  customer_id?: string | null;
   title: string;
   description?: string | null;
   priority: string;
@@ -28,6 +30,16 @@ export type Task = {
   due_at?: string | null;
   issue_category?: string | null;
   assigned_team?: string | null;
+  assigned_member?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type Customer = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -59,9 +71,11 @@ export type WorkflowResponse = {
   status: "completed" | "failed";
   engine_mode: "gemini_adk" | "heuristic_fallback";
   summary: string;
+  case_summary?: string | null;
   steps: WorkflowStep[];
   triage: Record<string, string>;
   case?: SupportCase | null;
+  customer?: Customer | null;
   tasks: Task[];
   events: Event[];
   notes: Note[];
@@ -69,6 +83,7 @@ export type WorkflowResponse = {
 };
 
 export type StateResponse = {
+  customers: Customer[];
   cases: SupportCase[];
   tasks: Task[];
   events: Event[];
@@ -87,5 +102,5 @@ export type StateResponse = {
 export type DeleteResponse = {
   ok: boolean;
   deleted_id: string;
-  resource: "task" | "event" | "note" | "workflow_run";
+  resource: "task" | "event" | "note" | "workflow_run" | "support_case" | "customer";
 };
