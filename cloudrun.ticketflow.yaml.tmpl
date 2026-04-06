@@ -1,46 +1,42 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: ${SERVICE_NAME}
+  name: "${SERVICE_NAME}"
 spec:
   template:
     metadata:
       annotations:
-        run.googleapis.com/cloudsql-instances: ${INSTANCE_CONNECTION_NAME}
+        run.googleapis.com/cloudsql-instances: "${INSTANCE_CONNECTION_NAME}"
     spec:
-      serviceAccountName: ${SERVICE_ACCOUNT_EMAIL}
+      serviceAccountName: "${SERVICE_ACCOUNT_EMAIL}"
       containers:
         - name: backend
-          image: ${BACKEND_IMAGE}
+          image: "${BACKEND_IMAGE}"
           ports:
             - containerPort: 8080
           env:
             - name: APP_ENV
-              value: production
-            - name: PORT
-              value: "8080"
+              value: "production"
             - name: DATABASE_URL
-              value: ${DATABASE_URL}
+              value: "${DATABASE_URL}"
             - name: MCP_SERVER_URL
-              value: http://localhost:8001/mcp
+              value: "http://localhost:8001/mcp"
             - name: CORS_ORIGINS
-              value: ${CORS_ORIGINS}
+              value: "${CORS_ORIGINS}"
             - name: GOOGLE_GENAI_USE_VERTEXAI
-              value: ${GOOGLE_GENAI_USE_VERTEXAI}
+              value: "${GOOGLE_GENAI_USE_VERTEXAI}"
             - name: GOOGLE_CLOUD_PROJECT
-              value: ${PROJECT_ID}
+              value: "${PROJECT_ID}"
             - name: GOOGLE_CLOUD_LOCATION
-              value: ${GOOGLE_CLOUD_LOCATION}
+              value: "${GOOGLE_CLOUD_LOCATION}"
             - name: GEMINI_MODEL
-              value: ${GEMINI_MODEL}
+              value: "${GEMINI_MODEL}"
             - name: ENABLE_HEURISTIC_FALLBACK
-              value: ${ENABLE_HEURISTIC_FALLBACK}
+              value: "${ENABLE_HEURISTIC_FALLBACK}"
         - name: mcp
-          image: ${MCP_IMAGE}
-          ports:
-            - containerPort: 8001
+          image: "${MCP_IMAGE}"
           env:
             - name: APP_ENV
-              value: production
+              value: "production"
             - name: DATABASE_URL
-              value: ${DATABASE_URL}
+              value: "${DATABASE_URL}"
