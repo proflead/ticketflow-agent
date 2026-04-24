@@ -1,0 +1,41 @@
+flowchart TD
+    A[TicketFlow Web App]
+
+    A --> B[Top Navigation]
+    B --> B1[Home]
+    B --> B2[Run Workflow]
+    B --> B3[Tasks]
+    B --> B4[Customers]
+    B --> B5[Support Cases]
+    B --> B6[Run Logs]
+
+    A --> C[Run Workflow Page]
+    C --> C1[Conversation textarea]
+    C --> C2[Example prompt buttons]
+    C --> C3[Run workflow button]
+    C --> C4[Latest result card]
+    C --> C5[Case, customer, triage, and step panels]
+
+    A --> D[Support Cases Page]
+    D --> D1[Case list]
+    D --> D2[Case filter]
+    D --> D3[Linked task cards]
+
+    A --> E[Case Details Page]
+    E --> E1[Conversation panel]
+    E --> E2[Routing summary]
+    E --> E3[Customer details]
+    E --> E4[Editable tasks]
+    E --> E5[Workflow run history]
+
+    A --> F[Customers Page]
+    F --> F1[Customer list]
+    F --> F2[Linked support context]
+
+    A --> G[Tasks Page]
+    G --> G1[Task board / list]
+    G --> G2[Assignment and status updates]
+
+    A --> H[Run Logs Page]
+    H --> H1[Workflow run history]
+    H --> H2[Engine mode badges]

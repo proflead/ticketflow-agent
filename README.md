@@ -1,99 +1,85 @@
 # TicketFlow Agent
 
-TicketFlow Agent is a hackathon-ready multi-agent AI system built with Google ADK, Gemini, MCP, FastAPI, React, and PostgreSQL. It demonstrates how a coordinator agent can decompose a productivity request, delegate work to specialist sub-agents, execute tools through a separate MCP service, persist structured data, and return a traceable workflow result through a real HTTP API.
+TicketFlow Agent is an AI-powered support workflow application that turns natural-language support conversations into structured support cases, customers, tasks, notes, and optional calendar events. It combines a React frontend, a FastAPI backend, Google ADK agent orchestration, an MCP tool layer, and a shared relational database.
 
-## Project Overview
-- Google ADK backend in Python
-- Gemini model configuration through environment variables
-- Coordinator agent plus `task_agent`, `calendar_agent`, and `notes_agent`
-- Separate MCP tools service with database-backed tools
-- PostgreSQL persistence for tasks, events, notes, and workflow runs
-- FastAPI API with structured JSON responses
-- Minimal React UI for demo use
-- Google Cloud deployment path using Cloud Run and Cloud SQL
+## What The App Does
+- Accepts a support chat transcript or free-form support request
+- Extracts customer details and a short conversation summary
+- Classifies the issue by category, assigned team, and severity
+- Creates a support case and workflow run record
+- Uses ADK agents to generate follow-up actions when AI execution succeeds
+- Falls back to deterministic workflow logic when AI execution is unavailable
+- Persists tasks, notes, events, cases, customers, and workflow history
+- Lets operators review and update records through the web UI
 
-## Architecture
+## Current Product Shape
+- `frontend/`
+  - React + Vite UI
+  - pages for workflow execution, tasks, customers, support cases, run logs, and case details
 - `backend/`
   - FastAPI API
-  - Google ADK agents
-  - workflow orchestration
-  - frontend static file serving in production
+  - workflow engine
+  - Google ADK agent orchestration
+  - Gemini / Vertex AI integration
+  - serves the built frontend in production
 - `mcp_service/`
-  - separate MCP server
-  - tools: `create_task`, `list_tasks`, `create_event`, `list_events`, `add_note`, `search_notes`
+  - FastMCP server
+  - database-backed tools for creating and listing tasks, notes, and events
 - `shared/`
   - shared SQLAlchemy models and Pydantic schemas
-- `frontend/`
-  - Vite React UI
 - `alembic/`
-  - database migration
+  - database migrations
 
-See [architecture.md](/home/proflead/Documents/ticketflow-agent/architecture.md) for the condensed design.
+## Runtime Flow
+1. A user submits a support request in the workflow page or through `POST /api/workflows/run`.
+2. The backend extracts intake data, classifies the issue, creates the customer if needed, creates a support case, and opens a workflow run record.
+3. The backend tries to execute the ADK root agent with task, notes, and calendar specialists.
+4. Agent actions are executed through the MCP gateway, which calls the MCP service over HTTP.
+5. The MCP service persists tasks, notes, and events in the shared database.
+6. If ADK execution fails and fallback is enabled, the backend runs deterministic workflow logic instead.
+7. The final response includes the case summary, triage result, workflow steps, created artifacts, and the engine mode used.
 
-## Screenshots / Demo Placeholders
-- Add a screenshot of the main prompt screen here
-- Add a screenshot of a successful workflow run here
-- Add a screenshot of the Google Cloud deployed app here
+## UI Pages
+- `Home`
+  - landing page and app framing
+- `Run Workflow`
+  - prompt input, sample chats, latest workflow result, engine mode, steps, and artifacts
+- `Tasks`
+  - operator view of created tasks
+- `Customers`
+  - customer records extracted from support conversations
+- `Support Cases`
+  - case list, case filter, and linked tasks
+- `Case Details`
+  - original conversation, routing, customer info, task editing, and workflow history
+- `Run Logs`
+  - workflow execution history and engine mode used
 
-## Repo Structure
-```text
-ticketflow-agent/
-├── alembic/
-├── backend/
-├── frontend/
-├── mcp_service/
-├── scripts/
-├── shared/
-├── .env.example
-├── architecture.md
-├── docker-compose.yml
-└── README.md
-```
-
-## Environment Variables
-Copy `.env.example` to `.env` and fill in the values you need.
-
-Core variables:
-- `DATABASE_URL`
-- `MCP_SERVER_URL`
-- `CORS_ORIGINS`
-- `GEMINI_MODEL`
-- `GOOGLE_API_KEY`
-- `GOOGLE_GENAI_USE_VERTEXAI`
-- `GOOGLE_CLOUD_PROJECT`
-- `GOOGLE_CLOUD_LOCATION`
-- `ENABLE_HEURISTIC_FALLBACK`
-- `VITE_API_BASE_URL`
-
-Notes:
-- Local development can use `GOOGLE_API_KEY`.
-- Google Cloud can use an API key or Vertex AI-compatible environment setup.
-- If Gemini credentials are missing and `ENABLE_HEURISTIC_FALLBACK=true`, the backend uses a narrow deterministic fallback so the stack can still be smoke-tested.
+## Diagrams
+- [Architecture](/home/proflead/Documents/ticketflow-agent/architecture.md)
+- [Architecture Mermaid](/home/proflead/Documents/ticketflow-agent/diagrams/architecture.mmd)
+- [Workflow Mermaid](/home/proflead/Documents/ticketflow-agent/diagrams/process-flow.mmd)
+- [UI Wireframe Mermaid](/home/proflead/Documents/ticketflow-agent/diagrams/ui-wireframe.mmd)
 
 ## Local Development
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 20+
-- Docker and Docker Compose
-- A Gemini API key or Vertex AI credentials for full ADK execution
+- Docker with permission to access the daemon
+- Gemini API key or Vertex AI credentials if you want ADK execution
 
 ### 1. Start PostgreSQL
 ```bash
 docker compose up -d postgres
 ```
 
-### 2. Install Python dependencies
-Backend:
+### 2. Create the virtual environment and install dependencies
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r backend/requirements.txt
-```
-
-MCP service uses the same venv in local development:
-```bash
-pip install -r mcp_service/requirements.txt
+python -m pip install -r backend/requirements.txt
+python -m pip install -r mcp_service/requirements.txt
 ```
 
 ### 3. Install frontend dependencies
@@ -108,298 +94,106 @@ cd ..
 cp .env.example .env
 ```
 
-Set at minimum:
+Minimum local settings:
 ```bash
 DATABASE_URL=postgresql+psycopg://ticketflow:ticketflow@localhost:5432/ticketflow
 MCP_SERVER_URL=http://localhost:8001/mcp
 VITE_API_BASE_URL=http://localhost:8080
 GOOGLE_API_KEY=your_api_key
+GOOGLE_GENAI_USE_VERTEXAI=false
+GEMINI_MODEL=gemini-2.5-flash
+ENABLE_HEURISTIC_FALLBACK=true
 ```
 
-### 5. Initialize the database
+Notes:
+- Use `GOOGLE_API_KEY` for the simplest local ADK path.
+- If using Vertex AI, set `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, and `GOOGLE_CLOUD_LOCATION`.
+- The backend returns `engine_mode` as either `gemini_adk` or `heuristic_fallback`.
+
+### 5. Run migrations
 ```bash
-source .venv/bin/activate
-export PYTHONPATH="$(pwd)/shared"
-alembic upgrade head
+python -m alembic upgrade head
 ```
 
-Or use the helper:
-```bash
-./scripts/migrate.sh
-```
-
-### 6. Run the MCP service
-```bash
-source .venv/bin/activate
-./scripts/run_local_mcp.sh
-```
-
-### 7. Run the backend
-```bash
-source .venv/bin/activate
-./scripts/run_local_backend.sh
-```
-
-### 8. Run the frontend
-```bash
-cd frontend
-npm run dev
-```
-
-Frontend URL:
-- `http://localhost:5173`
-
-Backend URL:
-- `http://localhost:8080`
-
-MCP service URL:
-- `http://localhost:8001/mcp`
-
-## Full Stack With Docker Compose
-Start the services:
-```bash
-docker compose up --build
-```
-
-Run the migration from your local Python environment:
-```bash
-source .venv/bin/activate
-export DATABASE_URL=postgresql+psycopg://ticketflow:ticketflow@localhost:5432/ticketflow
-export PYTHONPATH="$(pwd)/shared"
-alembic upgrade head
-```
-
-## How To Run The Backend
-```bash
-source .venv/bin/activate
-./scripts/run_local_backend.sh
-```
-
-## How To Run The MCP Service
+### 6. Start the services
+MCP service:
 ```bash
 source .venv/bin/activate
 ./scripts/run_local_mcp.sh
 ```
 
-## How To Run The Frontend
+Backend:
+```bash
+source .venv/bin/activate
+./scripts/run_local_backend.sh
+```
+
+Frontend:
 ```bash
 cd frontend
 npm run dev
 ```
 
-## API Endpoints
+Local URLs:
+- frontend: `http://localhost:5173`
+- backend: `http://localhost:8080`
+- MCP service: `http://localhost:8001/mcp`
+
+## API Surface
+- `GET /health`
 - `POST /api/workflows/run`
 - `GET /api/state`
-- `GET /health`
+- `GET /api/cases/{case_id}`
+- `PATCH /api/tasks/{task_id}`
+- `PATCH /api/tasks/{task_id}/assignment`
+- `DELETE /api/tasks/{task_id}`
+- `DELETE /api/events/{event_id}`
+- `DELETE /api/notes/{note_id}`
+- `DELETE /api/workflow-runs/{workflow_run_id}`
+- `DELETE /api/cases/{case_id}`
+- `DELETE /api/customers/{customer_id}`
 
-### Example curl Commands
-Run a workflow:
+### Example Workflow Request
 ```bash
 curl -X POST http://localhost:8080/api/workflows/run \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "Create a high-priority task for Friday'\''s client demo, block one hour tomorrow at 10 AM, and save note: bring pricing slides."
+    "prompt": "Live chat transcript:\nCustomer: Hi, we onboarded three new teammates today and none of them can reset their password.\nCustomer: My name is Sarah Lee. You can reach me at sarah.lee@northstar.io or +1 415 555 0101.\nAgent: Thanks, I am checking. Did they get the welcome email?\nCustomer: Yes, but the reset link says permission denied.\nAgent: Understood. I will escalate this."
   }'
 ```
 
-Fetch recent state:
+### Example State Request
 ```bash
 curl http://localhost:8080/api/state
 ```
 
-Health check:
-```bash
-curl http://localhost:8080/health
-```
-
-## Example User Prompts
-- `Create a high-priority task for Friday's client demo, block one hour tomorrow at 10 AM, and save note: bring pricing slides.`
-- `Save these meeting notes and create follow-up tasks: Action item: finalize onboarding checklist. Follow up with finance on discount approval.`
-- `Show my open tasks and recent notes.`
-- `Schedule a reminder and create a task from this support issue: Customer cannot access onboarding emails and needs a reply today.`
-
-## Google Cloud Deployment
-
-### Deployment Shape
-- Cloud Run service 1: backend API plus built frontend
-- Cloud Run service 2: MCP service
+## Deployment
+The current recommended production shape is:
+- one Cloud Run service named `ticketflow`
+- two containers inside that service
+  - `backend` as the public ingress container on port `8080`
+  - `mcp` as a sidecar container reached at `http://localhost:8001/mcp`
 - Cloud SQL for PostgreSQL
 
-### 1. Create or select a GCP project
-```bash
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-```
+The default deployment script is:
+- [scripts/deploy_cloudrun.sh](/home/proflead/Documents/ticketflow-agent/scripts/deploy_cloudrun.sh)
 
-### 2. Enable required APIs
-```bash
-gcloud services enable \
-  run.googleapis.com \
-  cloudbuild.googleapis.com \
-  artifactregistry.googleapis.com \
-  sqladmin.googleapis.com \
-  secretmanager.googleapis.com
-```
+The deploy guide is:
+- [cloud-run-deploy.md](/home/proflead/Documents/ticketflow-agent/cloud-run-deploy.md)
 
-If you plan to use Vertex AI auth flow, also enable:
-```bash
-gcloud services enable aiplatform.googleapis.com
-```
+Current deployment defaults:
+- Cloud Run region can stay regional, for example `asia-southeast1`
+- Vertex AI defaults to `GOOGLE_CLOUD_LOCATION=global`
+- Gemini defaults to `gemini-2.5-flash`
 
-### 3. Create Artifact Registry repository
-```bash
-gcloud artifacts repositories create ticketflow \
-  --repository-format=docker \
-  --location=us-central1
-```
+## Why The AI Stack Looks Like This
+- ADK handles agent orchestration and lets the backend route work through specialist task, notes, and calendar agents.
+- MCP provides a clean tool-execution layer so agents do not talk to the database directly.
+- FastAPI keeps the API and workflow engine simple to deploy and inspect.
+- PostgreSQL keeps workflow artifacts durable and queryable.
+- Cloud Run + Cloud SQL make the stack practical for demo and production-style deployment.
 
-### 4. Create Cloud SQL PostgreSQL instance
-```bash
-gcloud sql instances create ticketflow-db \
-  --database-version=POSTGRES_16 \
-  --cpu=1 \
-  --memory=3840MiB \
-  --region=us-central1
-```
-
-Create database and user:
-```bash
-gcloud sql databases create ticketflow --instance=ticketflow-db
-gcloud sql users create ticketflow --instance=ticketflow-db --password=CHANGE_ME
-```
-
-Fetch the Cloud SQL connection name:
-```bash
-gcloud sql instances describe ticketflow-db --format="value(connectionName)"
-```
-
-### 5. Create service accounts and IAM
-Create a runtime service account:
-```bash
-gcloud iam service-accounts create ticketflow-run
-```
-
-Grant Cloud SQL access:
-```bash
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:ticketflow-run@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/cloudsql.client"
-```
-
-If using Vertex AI:
-```bash
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:ticketflow-run@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/aiplatform.user"
-```
-
-### 6. Build and deploy the MCP service
-Build and push:
-```bash
-gcloud builds submit --tag us-central1-docker.pkg.dev/YOUR_PROJECT_ID/ticketflow/ticketflow-mcp .
-```
-
-Deploy:
-```bash
-gcloud run deploy ticketflow-mcp \
-  --image us-central1-docker.pkg.dev/YOUR_PROJECT_ID/ticketflow/ticketflow-mcp \
-  --region us-central1 \
-  --service-account ticketflow-run@YOUR_PROJECT_ID.iam.gserviceaccount.com \
-  --no-allow-unauthenticated \
-  --port 8001 \
-  --add-cloudsql-instances YOUR_PROJECT_ID:us-central1:ticketflow-db \
-  --set-env-vars APP_ENV=production,DATABASE_URL='postgresql+psycopg://ticketflow:CHANGE_ME@/ticketflow?host=/cloudsql/YOUR_PROJECT_ID:us-central1:ticketflow-db'
-```
-
-Get the MCP service URL:
-```bash
-gcloud run services describe ticketflow-mcp --region us-central1 --format="value(status.url)"
-```
-
-### 7. Build and deploy the backend service
-Build and push:
-```bash
-gcloud builds submit --tag us-central1-docker.pkg.dev/YOUR_PROJECT_ID/ticketflow/ticketflow-api .
-```
-
-Deploy:
-```bash
-gcloud run deploy ticketflow-api \
-  --image us-central1-docker.pkg.dev/YOUR_PROJECT_ID/ticketflow/ticketflow-api \
-  --region us-central1 \
-  --service-account ticketflow-run@YOUR_PROJECT_ID.iam.gserviceaccount.com \
-  --allow-unauthenticated \
-  --port 8080 \
-  --add-cloudsql-instances YOUR_PROJECT_ID:us-central1:ticketflow-db \
-  --set-env-vars APP_ENV=production,DATABASE_URL='postgresql+psycopg://ticketflow:CHANGE_ME@/ticketflow?host=/cloudsql/YOUR_PROJECT_ID:us-central1:ticketflow-db',MCP_SERVER_URL='https://TICKETFLOW_MCP_URL/mcp',CORS_ORIGINS='https://TICKETFLOW_API_URL',GEMINI_MODEL='gemini-2.0-flash',GOOGLE_API_KEY='YOUR_API_KEY'
-```
-
-If using Vertex AI instead of API key:
-```bash
---set-env-vars APP_ENV=production,DATABASE_URL='postgresql+psycopg://ticketflow:CHANGE_ME@/ticketflow?host=/cloudsql/YOUR_PROJECT_ID:us-central1:ticketflow-db',MCP_SERVER_URL='https://TICKETFLOW_MCP_URL/mcp',CORS_ORIGINS='https://TICKETFLOW_API_URL',GEMINI_MODEL='gemini-2.0-flash',GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT='YOUR_PROJECT_ID',GOOGLE_CLOUD_LOCATION='us-central1'
-```
-
-### 8. Run database migration
-Option 1: run locally through the Cloud SQL Auth Proxy or a temporary authorized network.
-
-Option 2: run a one-off Cloud Run job or container with the same image and env vars, then execute:
-```bash
-alembic upgrade head
-```
-
-### 9. Verify the deployment
-Health check:
-```bash
-curl https://YOUR_BACKEND_URL/health
-```
-
-Run the workflow endpoint:
-```bash
-curl -X POST https://YOUR_BACKEND_URL/api/workflows/run \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"Show my open tasks and recent notes."}'
-```
-
-### 10. Google Cloud operational notes
-- `ticketflow-mcp` should ideally not be public for a real deployment; keep it internal or restricted where possible.
-- Put API keys and database passwords in Secret Manager for a real environment.
-- Cloud Run services must remain stateless; all durable state belongs in Cloud SQL.
-
-## Limitations
-- Single demo user, no authentication
-- No external calendar integration
-- Minimal natural-language time parsing in fallback mode
-- No background reminders or notifications
-- No file uploads
-- MCP transport and ADK dependencies should be pinned and validated before a live demo
-
-## Future Improvements
-- Google login and user-level data isolation
-- Google Calendar integration
-- richer support issue extraction
-- workflow history page with replay
-- alerting and reminders
-- automated infrastructure with Terraform or Cloud Build pipelines
-- better observability and evaluation logging
-
-## Suggested MVP Scope
-- one strong end-to-end workflow endpoint
-- one small MCP tools service
-- one simple demo UI
-- Cloud Run + Cloud SQL deployment that can be explained and repeated quickly
-
-## Stretch Features
-- per-user workspaces
-- Slack or email notifications
-- file or PDF note ingestion
-- background scheduling
-- richer note search and tagging
-
-## Demo Script
-1. Open the web UI and explain the architecture at a high level.
-2. Paste: `Create a high-priority task for Friday's client demo, block one hour tomorrow at 10 AM, and save note: bring pricing slides.`
-3. Show the workflow summary, then point to created tasks, events, and notes.
-4. Paste: `Show my open tasks and recent notes.`
-5. Show that the system is reading structured data back from PostgreSQL through the same workflow stack.
-6. Mention that the backend uses Google ADK with a coordinator plus sub-agents, while the actual data operations are executed through a separate MCP service.
-7. Close by showing the deployment path: backend on Cloud Run, MCP service on Cloud Run, and Cloud SQL for PostgreSQL.
+## Known Behavior
+- If Gemini or Vertex execution fails and `ENABLE_HEURISTIC_FALLBACK=true`, the app still creates usable case artifacts through deterministic logic.
+- The workflow result always exposes which engine ran through `engine_mode`.
+- The UI intentionally surfaces whether a run used `Gemini ADK` or `Fallback`.

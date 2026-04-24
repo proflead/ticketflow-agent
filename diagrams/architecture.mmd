@@ -1,0 +1,24 @@
+flowchart LR
+    A[Support Operator] --> B[React Frontend]
+
+    B --> C[FastAPI Backend]
+    C --> D[Workflow Engine]
+    D --> E[AI Intake Extraction]
+    D --> F[Issue Classification]
+    D --> G[Support Case Creation]
+
+    D --> H[ADK Root Agent]
+    H --> H1[Task Agent]
+    H --> H2[Notes Agent]
+    H --> H3[Calendar Agent]
+
+    H1 --> I[MCP Gateway]
+    H2 --> I
+    H3 --> I
+
+    I --> J[FastMCP Service]
+    J --> K[(PostgreSQL / Cloud SQL)]
+
+    D --> K
+    C --> K
+    H --> L[Gemini on Vertex AI]

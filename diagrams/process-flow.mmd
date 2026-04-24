@@ -1,0 +1,16 @@
+flowchart LR
+    A[User submits support request] --> B[Extract intake details]
+    B --> C[Classify issue, team, and severity]
+    C --> D[Create customer if found]
+    D --> E[Create support case]
+    E --> F[Open workflow run]
+    F --> G[Try ADK root agent]
+    G --> H[Task, notes, and calendar agents]
+    H --> I[MCP tool calls]
+    I --> J[Persist tasks, notes, and events]
+    G --> K{AI succeeded?}
+    K -->|Yes| L[Return Gemini ADK result]
+    K -->|No| M[Run deterministic fallback]
+    M --> J
+    J --> N[Store workflow summary and steps]
+    N --> O[Display results in the web app]
