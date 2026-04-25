@@ -1,16 +1,18 @@
 flowchart LR
-    A[User submits support request] --> B[Extract intake details]
-    B --> C[Classify issue, team, and severity]
-    C --> D[Create customer if found]
-    D --> E[Create support case]
-    E --> F[Open workflow run]
-    F --> G[Try ADK root agent]
-    G --> H[Task, notes, and calendar agents]
+    A[Operator submits transcript] --> B[Classify issue and severity]
+    B --> C[Extract or update customer]
+    C --> D[Create support case]
+    D --> E[Open workflow run]
+    E --> F{Gemini ADK available?}
+    F -->|Yes| G[Run root agent]
+    G --> H[Task, notes, calendar specialists]
     H --> I[MCP tool calls]
-    I --> J[Persist tasks, notes, and events]
-    G --> K{AI succeeded?}
-    K -->|Yes| L[Return Gemini ADK result]
-    K -->|No| M[Run deterministic fallback]
-    M --> J
-    J --> N[Store workflow summary and steps]
-    N --> O[Display results in the web app]
+    F -->|No| J[Deterministic fallback]
+    G --> K{ADK succeeded?}
+    K -->|No| J
+    K -->|Yes| I
+    J --> I
+    I --> L[Persist tasks, notes, events]
+    L --> M[Store run steps and artifacts]
+    M --> N[Return engine mode and summaries]
+    N --> O[Support Queue, Cases, Tasks, Calendar, Traces]

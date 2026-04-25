@@ -1,13 +1,19 @@
 flowchart LR
-    A[Support Operator] --> B[React Frontend]
+    A[Support Operator] --> B[React + Vite Workspace]
+
+    B --> B1[Support Queue]
+    B --> B2[Cases Workspace]
+    B --> B3[Tasks Workspace]
+    B --> B4[Calendar]
+    B --> B5[Traces]
 
     B --> C[FastAPI Backend]
     C --> D[Workflow Engine]
-    D --> E[AI Intake Extraction]
+    D --> E[Intake + Customer Extraction]
     D --> F[Issue Classification]
-    D --> G[Support Case Creation]
+    D --> G[Case + Run Creation]
 
-    D --> H[ADK Root Agent]
+    D --> H[Gemini ADK Root Agent]
     H --> H1[Task Agent]
     H --> H2[Notes Agent]
     H --> H3[Calendar Agent]
@@ -19,6 +25,8 @@ flowchart LR
     I --> J[FastMCP Service]
     J --> K[(PostgreSQL / Cloud SQL)]
 
+    D --> M[Deterministic Fallback]
+    M --> I
     D --> K
     C --> K
-    H --> L[Gemini on Vertex AI]
+    H --> L[Gemini API or Vertex AI]

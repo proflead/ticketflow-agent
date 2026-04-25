@@ -1,12 +1,11 @@
 # TicketFlow Agent Architecture
 
 ## Overview
-TicketFlow Agent is a support-operations workflow system built around four application layers:
+TicketFlow Agent is an AI support operations workspace built around four application layers:
 
 1. `frontend/`
    - React + Vite UI
-   - workflow execution page
-   - records, customers, tasks, run logs, and case details pages
+   - Linear-style operations shell with support queue, workflow intake, cases, tasks, calendar, customers, traces, case details, and task details
 2. `backend/`
    - FastAPI HTTP API
    - workflow engine
@@ -20,14 +19,15 @@ TicketFlow Agent is a support-operations workflow system built around four appli
    - shared SQLAlchemy models and Pydantic schemas used by both Python services
 
 ## Runtime Flow
-1. The user submits a support request in the UI or by calling `POST /api/workflows/run`.
-2. The backend extracts intake details, classifies the issue, creates a customer record if needed, creates a support case, and opens a workflow run.
+1. The user submits a transcript in the UI or by calling `POST /api/workflows/run`.
+2. The backend classifies the issue, extracts contact data, creates or updates the customer, creates a support case, and opens a workflow run.
 3. The backend attempts ADK execution with a root agent and specialist task, notes, and calendar agents.
 4. Agents call wrapper tools that delegate to the MCP gateway.
 5. The MCP gateway calls the MCP service over HTTP.
-6. The MCP service persists tasks, notes, or events in the shared database.
-7. The backend stores workflow steps, artifacts, summary data, and engine mode in the workflow run record.
+6. The MCP service persists tasks, notes, or callback events in the shared database.
+7. The backend stores workflow steps, artifacts, automation summary, next action, confidence notes, and engine mode in the workflow run record.
 8. If ADK execution fails and fallback is enabled, deterministic workflow logic creates the artifacts instead.
+9. The frontend renders the artifacts in operational workspaces for support queue triage, case management, task execution, calendar callbacks, and trace review.
 
 ## Core Records
 - `customers`
@@ -38,8 +38,9 @@ TicketFlow Agent is a support-operations workflow system built around four appli
   - stores source text, issue category, assigned team, severity, and status
 - `tasks`
   - follow-up work linked to cases and optionally customers
+  - supports status, priority, due date, assigned team, and assigned member updates
 - `events`
-  - optional scheduled actions linked to cases
+  - optional scheduled callback actions linked to cases
 - `notes`
   - saved summaries and reference notes linked to cases
 - `workflow_runs`
@@ -74,6 +75,22 @@ These tools return structured JSON that the backend converts back into shared sc
   - `gemini_adk`
   - `heuristic_fallback`
 - If AI execution fails and fallback is enabled, the backend still creates a case, note, and follow-up tasks using deterministic logic.
+- The workflow engine retries once on Gemini quota throttling before falling back.
+- Local development can use `gemini-2.5-flash-lite` for lower quota pressure; Cloud Run defaults to `gemini-2.5-flash` with Vertex AI.
+
+## Current UI Workspaces
+- `Support Queue`
+  - live queue of cases, selected case summary, assigned tasks, pipeline status, trace ID, and engine mode
+- `Cases`
+  - three-column case management view with filters, selected case overview, linked tasks, callback, and latest trace
+- `Tasks`
+  - three-column task execution view with filters, selected task editor, assignee controls, linked case/customer context, and transcript snippet
+- `Calendar`
+  - callback events grouped by day with links back to cases
+- `Case Details` and `Task Details`
+  - deep-link editing surfaces for routing, task status, ownership, and history
+- `Traces`
+  - workflow runs with engine mode and step logs
 
 ## Cloud Deployment Shape
 The current recommended cloud deployment is:

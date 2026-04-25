@@ -1,6 +1,6 @@
 # Cloud Run Deployment
 
-Use this deployment flow for the current TicketFlow Agent repo.
+Use this deployment flow for the current TicketFlow Agent operations workspace.
 
 The current recommended production shape is one Cloud Run service named `ticketflow` with two containers:
 - `backend` on port `8080` as the public ingress container
@@ -18,7 +18,7 @@ export SERVICE_NAME="ticketflow"
 export DB_INSTANCE="ticketflow-db"
 export DB_NAME="ticketflow"
 export DB_USER="ticketflow"
-export DB_PASS="TicketflowDemo2026!"
+export DB_PASS="<strong-db-password>"
 export SERVICE_ACCOUNT_EMAIL="ticketflow-runner@$PROJECT_ID.iam.gserviceaccount.com"
 ```
 
@@ -155,6 +155,8 @@ Check:
 - `engine_mode`
 - `summary`
 - `errors`
+
+After deployment, the public app includes the Support Queue, Cases, Tasks, Calendar, Customers, Traces, Case Details, and Task Details workspaces.
 
 If the app falls back unexpectedly, inspect logs:
 

@@ -1,6 +1,6 @@
 # TicketFlow Agent
 
-TicketFlow Agent is an AI-powered support workflow application that turns natural-language support conversations into structured support cases, customers, tasks, notes, and optional calendar events. It combines a React frontend, a FastAPI backend, Google ADK agent orchestration, an MCP tool layer, and a shared relational database.
+TicketFlow Agent is an AI support operations workspace that turns live chat transcripts into accountable support work: cases, customers, tasks, notes, callback events, trace logs, and audit-ready workflow history. It combines a React + Vite enterprise UI, a FastAPI workflow backend, Gemini ADK agent orchestration, an MCP tool layer, and PostgreSQL.
 
 ## What The App Does
 - Accepts a support chat transcript or free-form support request
@@ -10,12 +10,12 @@ TicketFlow Agent is an AI-powered support workflow application that turns natura
 - Uses ADK agents to generate follow-up actions when AI execution succeeds
 - Falls back to deterministic workflow logic when AI execution is unavailable
 - Persists tasks, notes, events, cases, customers, and workflow history
-- Lets operators review and update records through the web UI
+- Lets operators triage cases, edit routing, assign tasks, update statuses, inspect callbacks, and review trace history through the web UI
 
 ## Current Product Shape
 - `frontend/`
   - React + Vite UI
-  - pages for workflow execution, tasks, customers, support cases, run logs, and case details
+  - Linear-style operations workspace with support queue, workflow intake, cases, tasks, calendar, customers, traces, case details, and task details
 - `backend/`
   - FastAPI API
   - workflow engine
@@ -24,35 +24,39 @@ TicketFlow Agent is an AI-powered support workflow application that turns natura
   - serves the built frontend in production
 - `mcp_service/`
   - FastMCP server
-  - database-backed tools for creating and listing tasks, notes, and events
+  - database-backed tools for creating and listing tasks, notes, and events through agent-safe MCP calls
 - `shared/`
   - shared SQLAlchemy models and Pydantic schemas
 - `alembic/`
   - database migrations
 
 ## Runtime Flow
-1. A user submits a support request in the workflow page or through `POST /api/workflows/run`.
-2. The backend extracts intake data, classifies the issue, creates the customer if needed, creates a support case, and opens a workflow run record.
-3. The backend tries to execute the ADK root agent with task, notes, and calendar specialists.
-4. Agent actions are executed through the MCP gateway, which calls the MCP service over HTTP.
-5. The MCP service persists tasks, notes, and events in the shared database.
-6. If ADK execution fails and fallback is enabled, the backend runs deterministic workflow logic instead.
-7. The final response includes the case summary, triage result, workflow steps, created artifacts, and the engine mode used.
+1. A user submits a transcript in `Run Workflow` or through `POST /api/workflows/run`.
+2. The backend classifies the case, extracts contact details, creates or updates the customer, creates a support case, and opens a workflow run.
+3. If Gemini is configured, the backend runs the ADK root agent with task, notes, and calendar specialists.
+4. Specialist actions call backend wrapper tools, which delegate persistence through the MCP gateway.
+5. The MCP service persists tasks, notes, and callback events in PostgreSQL.
+6. The backend stores run steps, artifacts, summaries, next action, confidence notes, and engine mode.
+7. If ADK execution is quota-limited or unavailable and fallback is enabled, deterministic logic creates usable artifacts and records `heuristic_fallback`.
 
 ## UI Pages
-- `Home`
-  - landing page and app framing
+- `Support Queue`
+  - operational home page with live cases, selected case detail, assigned tasks, pipeline state, trace ID, and engine mode
 - `Run Workflow`
-  - prompt input, sample chats, latest workflow result, engine mode, steps, and artifacts
+  - transcript input, scenario library, latest workflow result, artifacts, engine mode, and MCP trace
 - `Tasks`
-  - operator view of created tasks
+  - three-column task workspace with queue filters, selected task editor, assignee controls, linked case/customer context, and task detail links
+- `Task Details`
+  - direct deep-link view for one task with editable status, owner, team, due date, title, and description
 - `Customers`
   - customer records extracted from support conversations
-- `Support Cases`
-  - case list, case filter, and linked tasks
+- `Cases`
+  - three-column case workspace with filters, selected case overview, conversation, next action, linked tasks, callback, and latest trace
 - `Case Details`
-  - original conversation, routing, customer info, task editing, and workflow history
-- `Run Logs`
+  - original conversation, editable routing, customer info, editable tasks, next best action, agent timeline, and workflow history
+- `Calendar`
+  - scheduled callback events grouped by day with links back to related cases
+- `Traces`
   - workflow execution history and engine mode used
 
 ## Diagrams
@@ -101,12 +105,13 @@ MCP_SERVER_URL=http://localhost:8001/mcp
 VITE_API_BASE_URL=http://localhost:8080
 GOOGLE_API_KEY=your_api_key
 GOOGLE_GENAI_USE_VERTEXAI=false
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-2.5-flash-lite
 ENABLE_HEURISTIC_FALLBACK=true
 ```
 
 Notes:
 - Use `GOOGLE_API_KEY` for the simplest local ADK path.
+- `gemini-2.5-flash-lite` is a practical local default for low-quota API keys. Cloud deployments can use `gemini-2.5-flash` or a Vertex model your project has quota for.
 - If using Vertex AI, set `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, and `GOOGLE_CLOUD_LOCATION`.
 - The backend returns `engine_mode` as either `gemini_adk` or `heuristic_fallback`.
 
@@ -143,7 +148,9 @@ Local URLs:
 - `GET /health`
 - `POST /api/workflows/run`
 - `GET /api/state`
+- `POST /api/demo/reset`
 - `GET /api/cases/{case_id}`
+- `PATCH /api/cases/{case_id}`
 - `PATCH /api/tasks/{task_id}`
 - `PATCH /api/tasks/{task_id}/assignment`
 - `DELETE /api/tasks/{task_id}`
@@ -181,7 +188,7 @@ The default deployment script is:
 The deploy guide is:
 - [cloud-run-deploy.md](/home/proflead/Documents/ticketflow-agent/cloud-run-deploy.md)
 
-Current deployment defaults:
+Current Cloud Run deployment defaults:
 - Cloud Run region can stay regional, for example `asia-southeast1`
 - Vertex AI defaults to `GOOGLE_CLOUD_LOCATION=global`
 - Gemini defaults to `gemini-2.5-flash`
@@ -196,4 +203,5 @@ Current deployment defaults:
 ## Known Behavior
 - If Gemini or Vertex execution fails and `ENABLE_HEURISTIC_FALLBACK=true`, the app still creates usable case artifacts through deterministic logic.
 - The workflow result always exposes which engine ran through `engine_mode`.
-- The UI intentionally surfaces whether a run used `Gemini ADK` or `Fallback`.
+- The UI intentionally surfaces whether a run used `Gemini ADK` or `Heuristic Fallback`.
+- Support Queue, Cases, Tasks, Calendar, and detail pages read from real backend state. They are not static demo screens.
