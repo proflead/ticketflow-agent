@@ -1,67 +1,94 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { deleteCase, deleteTask, fetchState } from "../api";
-import { StateResponse, SupportCase, Task } from "../types";
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+import { deleteCase, deleteTask, fetchState } from "../api";
+import type { Customer, Event, StateResponse, SupportCase, Task } from "../types";
+
+type CaseFilter = "all" | "open" | "high" | "unassigned";
+
+function formatDate(value?: string | null) {
+  if (!value) return "Not set";
+  return new Date(value).toLocaleString();
+}
+
+function compactDate(value?: string | null) {
+  if (!value) return "No activity";
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function titleCase(value?: string | null) {
+  if (!value) return "Unassigned";
+  return value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function caseCode(id: string) {
+  return `TF-${id.slice(0, 4).toUpperCase()}`;
+}
+
+function statusClass(value?: string | null) {
+  const normalized = value?.toLowerCase();
+  if (normalized === "resolved" || normalized === "closed" || normalized === "completed") {
+    return "border-emerald-400/25 bg-emerald-400/10 text-emerald-700 dark:text-emerald-200";
+  }
+  if (normalized === "waiting") return "border-amber-400/25 bg-amber-400/10 text-amber-700 dark:text-amber-200";
+  if (normalized === "in_progress") return "border-blue-400/25 bg-blue-400/10 text-blue-700 dark:text-blue-200";
+  return "border-sky-400/25 bg-sky-400/10 text-sky-700 dark:text-sky-200";
+}
+
+function severityClass(value?: string | null) {
+  const normalized = value?.toLowerCase();
+  if (normalized === "critical" || normalized === "high") return "border-rose-400/25 bg-rose-400/10 text-rose-700 dark:text-rose-200";
+  if (normalized === "medium") return "border-blue-400/25 bg-blue-400/10 text-blue-700 dark:text-blue-200";
+  return "border-[var(--tf-border)] bg-[var(--tf-surface-muted)] text-[var(--tf-text-soft)]";
+}
+
+function Badge({ value, className }: { value: string; className?: string }) {
+  return <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs ${className || ""}`}>{value}</span>;
+}
+
+function MetricRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-1">
-      <span className="text-[11px] font-semibold uppercase text-[var(--tf-text-muted)]">{label}</span>
-      <span className="text-sm text-[var(--tf-text-soft)] dark:text-[var(--tf-text-soft)]">{value}</span>
+    <div className="flex items-center justify-between gap-4 border-b border-[var(--tf-border)] px-3 py-2.5 last:border-b-0">
+      <span className="text-xs text-[var(--tf-text-muted)]">{label}</span>
+      <span className="max-w-[220px] truncate text-right text-xs font-medium text-[var(--tf-text)]">{value}</span>
     </div>
   );
 }
 
-function RecordCard({
-  title,
-  meta,
-  children,
-  onDelete,
-}: {
-  title: string;
-  meta?: string;
-  children: ReactNode;
-  onDelete?: () => Promise<void>;
-}) {
-  return (
-    <details className="rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface)] p-4 open:border-slate-400/40   dark:open:border-slate-500/40">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
-        <div>
-          <h4 className="text-sm font-semibold text-[var(--tf-text)] ">{title}</h4>
-          {meta ? <p className="mt-1 text-xs text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">{meta}</p> : null}
-        </div>
-        {onDelete ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              void onDelete();
-            }}
-            className="rounded-md border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-300 hover:bg-rose-400/10"
-          >
-            Delete
-          </button>
-        ) : null}
-      </summary>
-      <div className="mt-4 space-y-3">{children}</div>
-    </details>
-  );
+function latestTime(supportCase: SupportCase, tasks: Task[], events: Event[]) {
+  const values = [supportCase.updated_at, ...tasks.map((task) => task.updated_at), ...events.map((event) => event.updated_at)]
+    .filter(Boolean)
+    .sort();
+  return values[values.length - 1] || supportCase.created_at;
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "Not scheduled";
-  return new Date(value).toLocaleString();
+function nextAction(supportCase: SupportCase, tasks: Task[], event?: Event) {
+  const openTask = tasks.find((task) => task.status !== "completed");
+  if (openTask) return `Resolve task: ${openTask.title}`;
+  if (event) return `Prepare callback for ${formatDate(event.start_at)}.`;
+  return `Review ${supportCase.assigned_team || "Support Operations"} ownership and close the loop.`;
+}
+
+function customerLabel(customer?: Customer | null) {
+  return customer?.name || customer?.email || "Unknown customer";
 }
 
 export function RecordsPage() {
   const [state, setState] = useState<StateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<CaseFilter>("all");
 
   async function refresh() {
     try {
-      setState(await fetchState());
+      const nextState = await fetchState();
+      setState(nextState);
       setError(null);
+      setSelectedCaseId((current) => current || nextState.cases[0]?.id || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     }
@@ -71,198 +98,296 @@ export function RecordsPage() {
     void refresh();
   }, []);
 
-  const filteredTasks = useMemo(() => {
-    const tasks = state?.tasks || [];
-    return selectedCaseId ? tasks.filter((task) => task.case_id === selectedCaseId) : tasks;
-  }, [selectedCaseId, state?.tasks]);
-
-  const sortedTasks = useMemo(
-    () =>
-      [...filteredTasks].sort((a, b) => {
-        const aTime = a.due_at ? new Date(a.due_at).getTime() : new Date(a.created_at || 0).getTime();
-        const bTime = b.due_at ? new Date(b.due_at).getTime() : new Date(b.created_at || 0).getTime();
-        return bTime - aTime;
-      }),
-    [filteredTasks]
-  );
-
-  const activeCase = useMemo(
-    () => (state?.cases || []).find((item) => item.id === selectedCaseId) || null,
-    [selectedCaseId, state?.cases]
-  );
+  const customersById = useMemo(() => new Map((state?.customers || []).map((customer) => [customer.id, customer])), [state?.customers]);
 
   const sortedCases = useMemo(
     () =>
       [...(state?.cases || [])].sort(
-        (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        (a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime()
       ),
     [state?.cases]
   );
 
+  const filteredCases = useMemo(() => {
+    return sortedCases.filter((supportCase) => {
+      if (filter === "open") return !["resolved", "closed"].includes(supportCase.status);
+      if (filter === "high") return ["high", "critical"].includes(supportCase.severity || "");
+      if (filter === "unassigned") return !supportCase.assigned_team;
+      return true;
+    });
+  }, [filter, sortedCases]);
+
+  const selectedCase = useMemo(() => {
+    if (!filteredCases.length) return null;
+    return filteredCases.find((supportCase) => supportCase.id === selectedCaseId) || filteredCases[0];
+  }, [filteredCases, selectedCaseId]);
+
+  const selectedTasks = useMemo(
+    () => (state?.tasks || []).filter((task) => task.case_id === selectedCase?.id),
+    [selectedCase?.id, state?.tasks]
+  );
+
+  const selectedEvents = useMemo(
+    () =>
+      (state?.events || [])
+        .filter((event) => event.case_id === selectedCase?.id)
+        .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()),
+    [selectedCase?.id, state?.events]
+  );
+
+  const selectedRuns = useMemo(
+    () =>
+      (state?.workflow_runs || [])
+        .filter((run) => run.case_id === selectedCase?.id)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    [selectedCase?.id, state?.workflow_runs]
+  );
+
+  const selectedCustomer = selectedCase?.customer_id ? customersById.get(selectedCase.customer_id) : null;
+  const openCaseCount = (state?.cases || []).filter((supportCase) => !["resolved", "closed"].includes(supportCase.status)).length;
+  const highCaseCount = (state?.cases || []).filter((supportCase) => ["high", "critical"].includes(supportCase.severity || "")).length;
+
+  async function removeSelectedCase() {
+    if (!selectedCase) return;
+    await deleteCase(selectedCase.id);
+    setSelectedCaseId(null);
+    await refresh();
+  }
+
+  async function removeTask(taskId: string) {
+    await deleteTask(taskId);
+    await refresh();
+  }
+
   return (
-    <div className="space-y-4 p-5">
-      <section className="rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface)] p-6  ">
-        <div className="flex items-start justify-between gap-4">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-[var(--tf-bg)]">
+      <div className="border-b border-[var(--tf-border)] bg-[var(--tf-surface)] px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold uppercase text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Support Cases</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--tf-text)] ">Cases and linked tasks</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--tf-text-soft)] dark:text-[var(--tf-text-soft)]">
-              This page is for the operator who needs to inspect support cases, review their linked tasks, and clean up
-              case records during daily operations.
+            <h1 className="text-sm font-semibold text-[var(--tf-text)]">Cases</h1>
+            <p className="text-xs text-[var(--tf-text-muted)]">
+              {openCaseCount} open · {highCaseCount} high priority · {state?.tasks.length || 0} tasks
             </p>
           </div>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="rounded-md border border-[var(--tf-border)] px-4 py-2 text-sm text-[var(--tf-text)] hover:bg-[var(--tf-surface-muted)]   dark:hover:bg-[var(--tf-surface)]/10"
+            className="rounded-md border border-[var(--tf-border)] px-3 py-1.5 text-sm text-[var(--tf-text-soft)] hover:bg-[var(--tf-row-hover)]"
           >
             Refresh
           </button>
         </div>
-        {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
-      </section>
+        {error ? <p className="mt-2 text-sm text-rose-500 dark:text-rose-300">{error}</p> : null}
+      </div>
 
-      <section className="overflow-hidden rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface)]  ">
-        <div className="px-6 py-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold uppercase text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Support Cases</p>
-              <h3 className="mt-2 text-xl font-semibold text-[var(--tf-text)] ">Select a case to focus the task view below</h3>
-            </div>
-            <span className="rounded-md border border-[var(--tf-border)] px-3 py-1 text-xs text-[var(--tf-text-muted)]  dark:text-[var(--tf-text-soft)]">
-              {state?.cases.length || 0} cases
-            </span>
-          </div>
-
-          <div className="mt-6 grid gap-3 lg:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setSelectedCaseId(null)}
-              className={`rounded-lg border p-5 text-left transition ${
-                selectedCaseId === null
-                  ? "border-blue-400/30 bg-[var(--tf-surface-muted)] dark:border-slate-500/40 dark:bg-[var(--tf-surface-muted)]"
-                  : "border-[var(--tf-border)] bg-[var(--tf-surface)]/70 hover:bg-[var(--tf-surface-muted)]  dark:bg-[var(--tf-surface-muted)] dark:hover:bg-[var(--tf-surface)]/5"
-              }`}
-            >
-              <p className="text-sm font-semibold text-[var(--tf-text)] ">All Cases</p>
-              <p className="mt-2 text-sm text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Show tasks across every support case.</p>
-            </button>
-            {(state?.cases || []).length === 0 ? (
-              <p className="text-sm text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">No support cases saved yet.</p>
-            ) : (
-              sortedCases.map((supportCase: SupportCase) => (
-                <div
-                  key={supportCase.id}
-                  className={`rounded-lg border p-5 transition ${
-                    selectedCaseId === supportCase.id
-                      ? "border-blue-400/30 bg-[var(--tf-surface-muted)] dark:border-slate-500/40 dark:bg-[var(--tf-surface-muted)]"
-                      : "border-[var(--tf-border)] bg-[var(--tf-surface)]/70  dark:bg-[var(--tf-surface-muted)]"
+      <div className="grid min-h-[calc(100vh-7.25rem)] xl:grid-cols-[360px_minmax(420px,1fr)_360px]">
+        <aside className="border-r border-[var(--tf-border)] bg-[var(--tf-surface)]">
+          <div className="border-b border-[var(--tf-border)] p-3">
+            <div className="flex flex-wrap gap-1">
+              {[
+                ["all", "All"],
+                ["open", "Open"],
+                ["high", "High"],
+                ["unassigned", "Unassigned"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value as CaseFilter)}
+                  className={`rounded-md px-2.5 py-1.5 text-xs ${
+                    filter === value
+                      ? "bg-[var(--tf-row-active)] text-[var(--tf-text)]"
+                      : "text-[var(--tf-text-muted)] hover:bg-[var(--tf-row-hover)] hover:text-[var(--tf-text-soft)]"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <button type="button" onClick={() => setSelectedCaseId(supportCase.id)} className="flex-1 text-left">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
-                          {supportCase.assigned_team || "Unassigned"}
-                        </span>
-                        <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
-                          {supportCase.issue_category || "General Support"}
-                        </span>
-                        <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
-                          {supportCase.severity || "medium"}
-                        </span>
-                      </div>
-                      <h4 className="mt-3 text-lg font-semibold text-[var(--tf-text)] ">{supportCase.title}</h4>
-                      <p className="mt-2 text-sm leading-6 text-[var(--tf-text-soft)] dark:text-[var(--tf-text-soft)]">{supportCase.source_text}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="text-xs text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Created: {formatDate(supportCase.created_at)}</span>
-                        <Link
-                          to={`/cases/${supportCase.id}`}
-                          className="rounded-md border border-[var(--tf-border)] px-3 py-1 text-xs text-[var(--tf-text-soft)] hover:bg-[var(--tf-surface-muted)]  dark:text-[var(--tf-text-soft)] dark:hover:bg-[var(--tf-surface)]/10"
-                        >
-                          Open case details
-                        </Link>
-                      </div>
-                    </button>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="max-h-[calc(100vh-10.25rem)] overflow-y-auto">
+            {filteredCases.length === 0 ? (
+              <div className="p-4 text-sm text-[var(--tf-text-muted)]">No cases match this view.</div>
+            ) : (
+              filteredCases.map((supportCase) => {
+                const active = supportCase.id === selectedCase?.id;
+                const caseTasks = (state?.tasks || []).filter((task) => task.case_id === supportCase.id);
+                const caseEvents = (state?.events || []).filter((event) => event.case_id === supportCase.id);
+                const customer = supportCase.customer_id ? customersById.get(supportCase.customer_id) : null;
+                return (
+                  <button
+                    key={supportCase.id}
+                    type="button"
+                    onClick={() => setSelectedCaseId(supportCase.id)}
+                    className={`w-full border-b border-[var(--tf-border)] px-4 py-3 text-left transition ${
+                      active ? "bg-[var(--tf-row-active)]" : "hover:bg-[var(--tf-row-hover)]"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-[var(--tf-text-muted)]">{caseCode(supportCase.id)}</span>
+                      <Badge value={titleCase(supportCase.severity)} className={severityClass(supportCase.severity)} />
+                    </div>
+                    <h2 className="mt-2 line-clamp-2 text-sm font-medium text-[var(--tf-text)]">{supportCase.title}</h2>
+                    <div className="mt-2 flex items-center justify-between gap-3 text-xs text-[var(--tf-text-muted)]">
+                      <span className="truncate">{customerLabel(customer)}</span>
+                      <span>{compactDate(latestTime(supportCase, caseTasks, caseEvents))}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <Badge value={titleCase(supportCase.status)} className={statusClass(supportCase.status)} />
+                      <span className="rounded-md border border-[var(--tf-border)] px-2 py-0.5 text-xs text-[var(--tf-text-muted)]">
+                        {caseTasks.length} tasks
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </aside>
+
+        <main className="min-w-0 border-r border-[var(--tf-border)] bg-[var(--tf-bg)]">
+          {selectedCase ? (
+            <>
+              <div className="border-b border-[var(--tf-border)] bg-[var(--tf-surface)] px-5 py-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--tf-text-muted)]">{caseCode(selectedCase.id)}</p>
+                    <h2 className="mt-1 text-lg font-semibold text-[var(--tf-text)]">{selectedCase.title}</h2>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge value={titleCase(selectedCase.status)} className={statusClass(selectedCase.status)} />
+                      <Badge value={titleCase(selectedCase.severity)} className={severityClass(selectedCase.severity)} />
+                      <span className="rounded-md border border-[var(--tf-border)] px-2 py-0.5 text-xs text-[var(--tf-text-muted)]">
+                        {selectedCase.assigned_team || "Unassigned team"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Link
+                      to={`/cases/${selectedCase.id}`}
+                      className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+                    >
+                      Open full case
+                    </Link>
                     <button
                       type="button"
-                      onClick={async () => {
-                        await deleteCase(supportCase.id);
-                        if (selectedCaseId === supportCase.id) {
-                          setSelectedCaseId(null);
-                        }
-                        await refresh();
-                      }}
-                      className="rounded-md border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-600 hover:bg-rose-400/10 dark:text-rose-300"
+                      onClick={() => void removeSelectedCase()}
+                      className="rounded-md border border-rose-400/30 px-3 py-1.5 text-sm text-rose-600 hover:bg-rose-500/10 dark:text-rose-300"
                     >
-                      Delete case
+                      Delete
                     </button>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+              </div>
 
-        <div className="border-t border-[var(--tf-border)] bg-[var(--tf-surface-muted)] px-6 py-6  dark:bg-[var(--tf-surface-muted)]">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold uppercase text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Active View</p>
-              <h3 className="mt-2 text-xl font-semibold text-[var(--tf-text)] ">
-                {activeCase ? `Tasks linked to case: ${activeCase.title}` : "Showing tasks from all cases"}
-              </h3>
-            </div>
-            {activeCase ? (
-              <button
-                type="button"
-                onClick={() => setSelectedCaseId(null)}
-                className="rounded-md border border-[var(--tf-border)] px-4 py-2 text-sm text-[var(--tf-text)] hover:bg-[var(--tf-surface-muted)]   dark:hover:bg-[var(--tf-surface)]/10"
-              >
-                Clear case filter
-              </button>
-            ) : null}
-          </div>
-          {activeCase ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
-                {activeCase.assigned_team || "Unassigned"}
-              </span>
-              <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
-                {activeCase.issue_category || "General Support"}
-              </span>
-              <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
-                {activeCase.severity || "medium"}
-              </span>
-            </div>
-          ) : null}
+              <div className="space-y-4 p-5">
+                <section className="rounded-md border border-[var(--tf-border)] bg-[var(--tf-surface)]">
+                  <div className="border-b border-[var(--tf-border)] px-4 py-3">
+                    <h3 className="text-sm font-semibold text-[var(--tf-text)]">Overview</h3>
+                  </div>
+                  <div className="grid gap-0 divide-y divide-[var(--tf-border)] md:grid-cols-2 md:divide-x md:divide-y-0">
+                    <div className="divide-y divide-[var(--tf-border)]">
+                      <MetricRow label="Customer" value={customerLabel(selectedCustomer)} />
+                      <MetricRow label="Email" value={selectedCustomer?.email || "Not captured"} />
+                      <MetricRow label="Team" value={selectedCase.assigned_team || "Unassigned"} />
+                    </div>
+                    <div className="divide-y divide-[var(--tf-border)]">
+                      <MetricRow label="Category" value={selectedCase.issue_category || "General Support"} />
+                      <MetricRow label="Created" value={formatDate(selectedCase.created_at)} />
+                      <MetricRow label="Updated" value={formatDate(selectedCase.updated_at)} />
+                    </div>
+                  </div>
+                </section>
 
-          <div className="mt-6 space-y-3">
-            {sortedTasks.length === 0 ? (
-              <p className="text-sm text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">No tasks linked to this view yet.</p>
-            ) : (
-              sortedTasks.map((task) => (
-                <RecordCard
-                  key={task.id}
-                  title={task.title}
-                  meta={`${task.priority} priority${task.due_at ? ` · due ${formatDate(task.due_at)}` : ""}`}
-                  onDelete={async () => {
-                    await deleteTask(task.id);
-                    await refresh();
-                  }}
-                >
-                  <DetailRow label="Status" value={task.status} />
-                  <DetailRow label="Assigned team" value={task.assigned_team || "Not assigned"} />
-                  <DetailRow label="Assigned member" value={task.assigned_member || "Not assigned"} />
-                  <DetailRow label="Issue category" value={task.issue_category || "Not classified"} />
-                  <DetailRow label="Task notes" value={task.description || "No task notes"} />
-                  <DetailRow label="Created" value={formatDate(task.created_at)} />
-                  <DetailRow label="ID" value={task.id} />
-                </RecordCard>
-              ))
-            )}
+                <section className="rounded-md border border-[var(--tf-border)] bg-[var(--tf-surface)] p-4">
+                  <p className="text-xs font-medium uppercase text-[var(--tf-text-muted)]">Conversation</p>
+                  <p className="mt-3 line-clamp-[10] whitespace-pre-wrap text-sm leading-6 text-[var(--tf-text-soft)]">
+                    {selectedCase.source_text}
+                  </p>
+                </section>
+
+                <section className="rounded-md border border-blue-400/20 bg-blue-400/[0.06] p-4">
+                  <p className="text-xs font-medium uppercase text-blue-700 dark:text-blue-200">Next action</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--tf-text)]">{nextAction(selectedCase, selectedTasks, selectedEvents[0])}</p>
+                </section>
+              </div>
+            </>
+          ) : (
+            <div className="p-5 text-sm text-[var(--tf-text-muted)]">Select a case to inspect it.</div>
+          )}
+        </main>
+
+        <aside className="bg-[var(--tf-surface-muted)]">
+          <div className="border-b border-[var(--tf-border)] bg-[var(--tf-surface)] px-4 py-3">
+            <h3 className="text-sm font-semibold text-[var(--tf-text)]">Linked work</h3>
+            <p className="text-xs text-[var(--tf-text-muted)]">Tasks, callback, trace</p>
           </div>
-        </div>
-      </section>
+          <div className="max-h-[calc(100vh-10.25rem)] space-y-4 overflow-y-auto p-4">
+            <section>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-xs font-medium uppercase text-[var(--tf-text-muted)]">Tasks</p>
+                <span className="text-xs text-[var(--tf-text-muted)]">{selectedTasks.length}</span>
+              </div>
+              <div className="divide-y divide-[var(--tf-border)] rounded-md border border-[var(--tf-border)] bg-[var(--tf-surface)]">
+                {selectedTasks.length ? (
+                  selectedTasks.map((task) => (
+                    <div key={task.id} className="grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5">
+                      <Link to={`/tasks/${task.id}`} className="min-w-0">
+                        <p className="truncate text-sm text-[var(--tf-text)]">{task.title}</p>
+                        <p className="mt-0.5 text-xs text-[var(--tf-text-muted)]">
+                          {task.assigned_member || task.assigned_team || "Unassigned"} · {task.priority}
+                        </p>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => void removeTask(task.id)}
+                        className="text-xs text-rose-600 hover:text-rose-500 dark:text-rose-300"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-3 py-3 text-sm text-[var(--tf-text-muted)]">No linked tasks.</div>
+                )}
+              </div>
+            </section>
+
+            <section>
+              <p className="mb-2 text-xs font-medium uppercase text-[var(--tf-text-muted)]">Callback</p>
+              <div className="rounded-md border border-[var(--tf-border)] bg-[var(--tf-surface)] p-3">
+                {selectedEvents[0] ? (
+                  <>
+                    <p className="text-sm font-medium text-[var(--tf-text)]">{selectedEvents[0].title}</p>
+                    <p className="mt-1 text-xs text-[var(--tf-text-muted)]">{formatDate(selectedEvents[0].start_at)}</p>
+                    <Link to="/calendar" className="mt-3 inline-flex text-xs text-blue-600 hover:text-blue-500 dark:text-blue-300">
+                      View calendar
+                    </Link>
+                  </>
+                ) : (
+                  <p className="text-sm text-[var(--tf-text-muted)]">No callback scheduled.</p>
+                )}
+              </div>
+            </section>
+
+            <section>
+              <p className="mb-2 text-xs font-medium uppercase text-[var(--tf-text-muted)]">Latest trace</p>
+              <div className="divide-y divide-[var(--tf-border)] rounded-md border border-[var(--tf-border)] bg-[var(--tf-surface)]">
+                {selectedRuns[0] ? (
+                  <>
+                    <MetricRow label="Engine" value={selectedRuns[0].engine_mode || "Unknown"} />
+                    <MetricRow label="Status" value={selectedRuns[0].status} />
+                    <MetricRow label="Steps" value={`${selectedRuns[0].steps_json?.length || 0}`} />
+                    <MetricRow label="Run" value={formatDate(selectedRuns[0].created_at)} />
+                  </>
+                ) : (
+                  <div className="px-3 py-3 text-sm text-[var(--tf-text-muted)]">No run trace linked.</div>
+                )}
+              </div>
+            </section>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
