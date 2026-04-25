@@ -6,8 +6,8 @@ import { StateResponse, SupportCase, Task } from "../types";
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-1">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</span>
-      <span className="text-sm text-slate-700 dark:text-slate-200">{value}</span>
+      <span className="text-[11px] font-semibold uppercase text-[var(--tf-text-muted)]">{label}</span>
+      <span className="text-sm text-[var(--tf-text-soft)] dark:text-[var(--tf-text-soft)]">{value}</span>
     </div>
   );
 }
@@ -24,11 +24,11 @@ function RecordCard({
   onDelete?: () => Promise<void>;
 }) {
   return (
-    <details className="rounded-2xl border border-black/10 bg-white/90 p-4 open:border-slate-400/40 dark:border-white/10 dark:bg-slate-900/60 dark:open:border-slate-500/40">
+    <details className="rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface)] p-4 open:border-slate-400/40   dark:open:border-slate-500/40">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
         <div>
-          <h4 className="text-sm font-semibold text-slate-950 dark:text-white">{title}</h4>
-          {meta ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{meta}</p> : null}
+          <h4 className="text-sm font-semibold text-[var(--tf-text)] ">{title}</h4>
+          {meta ? <p className="mt-1 text-xs text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">{meta}</p> : null}
         </div>
         {onDelete ? (
           <button
@@ -37,7 +37,7 @@ function RecordCard({
               event.preventDefault();
               void onDelete();
             }}
-            className="rounded-full border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-300 hover:bg-rose-400/10"
+            className="rounded-md border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-300 hover:bg-rose-400/10"
           >
             Delete
           </button>
@@ -100,21 +100,21 @@ export function RecordsPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-xl shadow-black/5 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/30">
+    <div className="space-y-4 p-5">
+      <section className="rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface)] p-6  ">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Support Cases</p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">Cases and linked tasks</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+            <p className="text-sm font-semibold uppercase text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Support Cases</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--tf-text)] ">Cases and linked tasks</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--tf-text-soft)] dark:text-[var(--tf-text-soft)]">
               This page is for the operator who needs to inspect support cases, review their linked tasks, and clean up
-              case records during a demo or daily workflow.
+              case records during daily operations.
             </p>
           </div>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="rounded-full border border-black/10 px-4 py-2 text-sm text-slate-900 hover:bg-slate-100 dark:border-white/10 dark:text-white dark:hover:bg-white/10"
+            className="rounded-md border border-[var(--tf-border)] px-4 py-2 text-sm text-[var(--tf-text)] hover:bg-[var(--tf-surface-muted)]   dark:hover:bg-[var(--tf-surface)]/10"
           >
             Refresh
           </button>
@@ -122,14 +122,14 @@ export function RecordsPage() {
         {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
       </section>
 
-      <section className="overflow-hidden rounded-3xl border border-black/10 bg-white/90 shadow-xl shadow-black/5 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/30">
+      <section className="overflow-hidden rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface)]  ">
         <div className="px-6 py-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Support Cases</p>
-              <h3 className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">Select a case to focus the task view below</h3>
+              <p className="text-sm font-semibold uppercase text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Support Cases</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--tf-text)] ">Select a case to focus the task view below</h3>
             </div>
-            <span className="rounded-full border border-black/10 px-3 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-300">
+            <span className="rounded-md border border-[var(--tf-border)] px-3 py-1 text-xs text-[var(--tf-text-muted)]  dark:text-[var(--tf-text-soft)]">
               {state?.cases.length || 0} cases
             </span>
           </div>
@@ -138,47 +138,47 @@ export function RecordsPage() {
             <button
               type="button"
               onClick={() => setSelectedCaseId(null)}
-              className={`rounded-2xl border p-5 text-left transition ${
+              className={`rounded-lg border p-5 text-left transition ${
                 selectedCaseId === null
-                  ? "border-slate-400/50 bg-slate-100 dark:border-slate-500/40 dark:bg-slate-800"
-                  : "border-black/10 bg-white/70 hover:bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 dark:hover:bg-white/5"
+                  ? "border-blue-400/30 bg-[var(--tf-surface-muted)] dark:border-slate-500/40 dark:bg-[var(--tf-surface-muted)]"
+                  : "border-[var(--tf-border)] bg-[var(--tf-surface)]/70 hover:bg-[var(--tf-surface-muted)]  dark:bg-[var(--tf-surface-muted)] dark:hover:bg-[var(--tf-surface)]/5"
               }`}
             >
-              <p className="text-sm font-semibold text-slate-950 dark:text-white">All Cases</p>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Show tasks across every support case.</p>
+              <p className="text-sm font-semibold text-[var(--tf-text)] ">All Cases</p>
+              <p className="mt-2 text-sm text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Show tasks across every support case.</p>
             </button>
             {(state?.cases || []).length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No support cases saved yet.</p>
+              <p className="text-sm text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">No support cases saved yet.</p>
             ) : (
               sortedCases.map((supportCase: SupportCase) => (
                 <div
                   key={supportCase.id}
-                  className={`rounded-2xl border p-5 transition ${
+                  className={`rounded-lg border p-5 transition ${
                     selectedCaseId === supportCase.id
-                      ? "border-slate-400/50 bg-slate-100 dark:border-slate-500/40 dark:bg-slate-800"
-                      : "border-black/10 bg-white/70 dark:border-white/10 dark:bg-slate-950/50"
+                      ? "border-blue-400/30 bg-[var(--tf-surface-muted)] dark:border-slate-500/40 dark:bg-[var(--tf-surface-muted)]"
+                      : "border-[var(--tf-border)] bg-[var(--tf-surface)]/70  dark:bg-[var(--tf-surface-muted)]"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <button type="button" onClick={() => setSelectedCaseId(supportCase.id)} className="flex-1 text-left">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                        <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
                           {supportCase.assigned_team || "Unassigned"}
                         </span>
-                        <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                        <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
                           {supportCase.issue_category || "General Support"}
                         </span>
-                        <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                        <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
                           {supportCase.severity || "medium"}
                         </span>
                       </div>
-                      <h4 className="mt-3 text-lg font-semibold text-slate-950 dark:text-white">{supportCase.title}</h4>
-                      <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">{supportCase.source_text}</p>
+                      <h4 className="mt-3 text-lg font-semibold text-[var(--tf-text)] ">{supportCase.title}</h4>
+                      <p className="mt-2 text-sm leading-6 text-[var(--tf-text-soft)] dark:text-[var(--tf-text-soft)]">{supportCase.source_text}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Created: {formatDate(supportCase.created_at)}</span>
+                        <span className="text-xs text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Created: {formatDate(supportCase.created_at)}</span>
                         <Link
                           to={`/cases/${supportCase.id}`}
-                          className="rounded-full border border-black/10 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                          className="rounded-md border border-[var(--tf-border)] px-3 py-1 text-xs text-[var(--tf-text-soft)] hover:bg-[var(--tf-surface-muted)]  dark:text-[var(--tf-text-soft)] dark:hover:bg-[var(--tf-surface)]/10"
                         >
                           Open case details
                         </Link>
@@ -193,7 +193,7 @@ export function RecordsPage() {
                         }
                         await refresh();
                       }}
-                      className="rounded-full border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-600 hover:bg-rose-400/10 dark:text-rose-300"
+                      className="rounded-md border border-rose-400/30 px-3 py-1 text-xs font-medium text-rose-600 hover:bg-rose-400/10 dark:text-rose-300"
                     >
                       Delete case
                     </button>
@@ -204,11 +204,11 @@ export function RecordsPage() {
           </div>
         </div>
 
-        <div className="border-t border-black/10 bg-slate-50/80 px-6 py-6 dark:border-white/10 dark:bg-slate-950/50">
+        <div className="border-t border-[var(--tf-border)] bg-[var(--tf-surface-muted)] px-6 py-6  dark:bg-[var(--tf-surface-muted)]">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Active View</p>
-              <h3 className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">
+              <p className="text-sm font-semibold uppercase text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Active View</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--tf-text)] ">
                 {activeCase ? `Tasks linked to case: ${activeCase.title}` : "Showing tasks from all cases"}
               </h3>
             </div>
@@ -216,7 +216,7 @@ export function RecordsPage() {
               <button
                 type="button"
                 onClick={() => setSelectedCaseId(null)}
-                className="rounded-full border border-black/10 px-4 py-2 text-sm text-slate-900 hover:bg-slate-100 dark:border-white/10 dark:text-white dark:hover:bg-white/10"
+                className="rounded-md border border-[var(--tf-border)] px-4 py-2 text-sm text-[var(--tf-text)] hover:bg-[var(--tf-surface-muted)]   dark:hover:bg-[var(--tf-surface)]/10"
               >
                 Clear case filter
               </button>
@@ -224,13 +224,13 @@ export function RecordsPage() {
           </div>
           {activeCase ? (
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
                 {activeCase.assigned_team || "Unassigned"}
               </span>
-              <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
                 {activeCase.issue_category || "General Support"}
               </span>
-              <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
                 {activeCase.severity || "medium"}
               </span>
             </div>
@@ -238,7 +238,7 @@ export function RecordsPage() {
 
           <div className="mt-6 space-y-3">
             {sortedTasks.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No tasks linked to this view yet.</p>
+              <p className="text-sm text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">No tasks linked to this view yet.</p>
             ) : (
               sortedTasks.map((task) => (
                 <RecordCard

@@ -6,9 +6,42 @@
 }
 
 body {
-  @apply bg-slate-100 text-slate-950 font-sans dark:bg-slate-950 dark:text-slate-100;
+  @apply bg-slate-100 text-slate-950 font-sans antialiased dark:bg-slate-950 dark:text-slate-100;
 }
 
 #root {
   @apply min-h-screen;
+}
+
+button,
+input,
+textarea,
+select {
+  letter-spacing: 0;
+}
+
+:root {
+  --tf-bg: #f8fafc;
+  --tf-sidebar: #ffffff;
+  --tf-surface: #ffffff;
+  --tf-surface-muted: #f1f5f9;
+  --tf-border: rgba(15, 23, 42, 0.12);
+  --tf-text: #0f172a;
+  --tf-text-soft: #334155;
+  --tf-text-muted: #64748b;
+  --tf-row-hover: rgba(15, 23, 42, 0.04);
+  --tf-row-active: rgba(59, 130, 246, 0.1);
+}
+
+.dark {
+  --tf-bg: #0b0d12;
+  --tf-sidebar: #090b10;
+  --tf-surface: #0f1218;
+  --tf-surface-muted: rgba(255, 255, 255, 0.03);
+  --tf-border: rgba(255, 255, 255, 0.1);
+  --tf-text: #f8fafc;
+  --tf-text-soft: #cbd5e1;
+  --tf-text-muted: #64748b;
+  --tf-row-hover: rgba(255, 255, 255, 0.035);
+  --tf-row-active: rgba(96, 165, 250, 0.1);
 }

@@ -47,8 +47,16 @@ class TaskUpdate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
     priority: Literal["low", "medium", "high"] = "medium"
-    status: Literal["open", "completed"] = "open"
+    status: Literal["open", "in_progress", "waiting", "completed"] = "open"
     due_at: datetime | None = None
+    assigned_team: str | None = None
+
+
+class SupportCaseUpdate(BaseModel):
+    assigned_team: str | None = None
+    issue_category: str | None = None
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
+    status: Literal["open", "in_progress", "waiting", "resolved", "closed"] = "open"
 
 
 class EventCreate(BaseModel):
@@ -139,6 +147,9 @@ class WorkflowArtifacts(BaseModel):
 class WorkflowResult(BaseModel):
     summary: str
     case_summary: str | None = None
+    automation_summary: str | None = None
+    suggested_next_action: str | None = None
+    confidence_notes: str | None = None
     steps: list[WorkflowStep] = Field(default_factory=list)
     triage: dict[str, Any] = Field(default_factory=dict)
     case: SupportCaseRead | None = None
@@ -190,6 +201,7 @@ class SupportCaseDetailResponse(BaseModel):
     customer: CustomerRead | None = None
     tasks: list[TaskRead] = Field(default_factory=list)
     workflow_runs: list[WorkflowRunRead] = Field(default_factory=list)
+    suggested_next_action: str | None = None
 
 
 class DeleteResponse(BaseModel):

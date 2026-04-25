@@ -4,6 +4,8 @@ export type WorkflowStep = {
   status: "planned" | "completed" | "failed";
   detail: string;
   tool_name?: string | null;
+  tool_input?: Record<string, unknown> | null;
+  tool_output?: Record<string, unknown> | null;
 };
 
 export type SupportCase = {
@@ -72,6 +74,9 @@ export type WorkflowResponse = {
   engine_mode: "gemini_adk" | "heuristic_fallback";
   summary: string;
   case_summary?: string | null;
+  automation_summary?: string | null;
+  suggested_next_action?: string | null;
+  confidence_notes?: string | null;
   steps: WorkflowStep[];
   triage: Record<string, string>;
   case?: SupportCase | null;
@@ -87,6 +92,7 @@ export type CaseDetailResponse = {
   customer?: Customer | null;
   tasks: Task[];
   workflow_runs: StateResponse["workflow_runs"];
+  suggested_next_action?: string | null;
 };
 
 export type StateResponse = {
@@ -102,7 +108,10 @@ export type StateResponse = {
     status: string;
     summary?: string | null;
     engine_mode?: string | null;
+    steps_json?: WorkflowStep[];
+    artifacts_json?: Record<string, unknown>;
     created_at: string;
+    completed_at?: string | null;
   }>;
 };
 

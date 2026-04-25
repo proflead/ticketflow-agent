@@ -37,17 +37,32 @@ def parse_relative_schedule(source: str, now: datetime | None = None) -> tuple[d
         base_day = (now + timedelta(days=1)).date()
     elif "today" in text:
         base_day = now.date()
+    elif "next business day" in text:
+        next_day = now + timedelta(days=1)
+        while next_day.weekday() >= 5:
+            next_day += timedelta(days=1)
+        base_day = next_day.date()
+    elif "next week" in text:
+        base_day = (now + timedelta(days=7)).date()
 
     if base_day is None:
         return None
 
-    time_match = re.search(r"at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", text)
+    time_match = re.search(r"(?:at|by|for)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", text)
     if not time_match:
-        return None
+        if "morning" in text:
+            hour, minute, meridiem = 9, 0, None
+        elif "afternoon" in text:
+            hour, minute, meridiem = 14, 0, None
+        elif "end of day" in text or "eod" in text:
+            hour, minute, meridiem = 17, 0, None
+        else:
+            return None
+    else:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2) or 0)
+        meridiem = time_match.group(3)
 
-    hour = int(time_match.group(1))
-    minute = int(time_match.group(2) or 0)
-    meridiem = time_match.group(3)
     if meridiem == "pm" and hour != 12:
         hour += 12
     if meridiem == "am" and hour == 12:

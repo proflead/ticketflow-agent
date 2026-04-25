@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -23,6 +24,7 @@ from ticketflow_shared.schemas import (
     StateResponse,
     SupportCaseDetailResponse,
     SupportCaseRead,
+    SupportCaseUpdate,
     TaskAssignmentUpdate,
     TaskCreate,
     TaskRead,
@@ -33,7 +35,7 @@ from ticketflow_shared.schemas import (
     WorkflowRunResponse,
     WorkflowStep,
 )
-from ticketflow_shared.utils import derive_note_title, derive_task_title, parse_relative_schedule
+from ticketflow_shared.utils import derive_event_title, derive_note_title, derive_task_title, parse_relative_schedule
 
 from app.agents.agent import build_root_agent
 from app.config import Settings
@@ -49,7 +51,7 @@ class WorkflowEngine:
 
     async def run(self, request: WorkflowRunRequest) -> WorkflowRunResponse:
         with get_session() as session:
-            ai_intake = await self._extract_intake_with_ai(request.prompt)
+            ai_intake = {} if self._can_use_adk() else await self._extract_intake_with_ai(request.prompt)
             triage = self._classify_issue(request.prompt)
             customer = self._get_or_create_customer(
                 session,
@@ -74,6 +76,9 @@ class WorkflowEngine:
                 workflow_run.artifacts_json = {
                     "engine_mode": engine_mode,
                     "case_summary": result.case_summary,
+                    "automation_summary": result.automation_summary,
+                    "suggested_next_action": result.suggested_next_action,
+                    "confidence_notes": result.confidence_notes,
                     "triage": result.triage,
                     "tasks": [task.model_dump(mode="json") for task in result.tasks],
                     "events": [event.model_dump(mode="json") for event in result.events],
@@ -87,6 +92,9 @@ class WorkflowEngine:
                     engine_mode=engine_mode,
                     summary=result.summary,
                     case_summary=result.case_summary,
+                    automation_summary=result.automation_summary,
+                    suggested_next_action=result.suggested_next_action,
+                    confidence_notes=result.confidence_notes,
                     steps=result.steps,
                     triage=result.triage,
                     case=result.case,
@@ -108,6 +116,9 @@ class WorkflowEngine:
                     engine_mode="heuristic_fallback",
                     summary="The workflow could not be completed.",
                     case_summary=self._derive_case_summary(request.prompt, triage),
+                    automation_summary="TicketFlow opened a case record but could not complete artifact creation.",
+                    suggested_next_action="Review the failed workflow run and retry after service recovery.",
+                    confidence_notes="The workflow failed before routing confidence could be recorded.",
                     steps=[],
                     triage={},
                     case=SupportCaseRead.model_validate(support_case),
@@ -150,35 +161,43 @@ class WorkflowEngine:
 
         if self._can_use_adk():
             try:
-                agent = build_root_agent(self.settings.gemini_model, gateway)
-                session_service = InMemorySessionService()
-                session_id = f"ticketflow-{uuid.uuid4()}"
-                await session_service.create_session(
-                    app_name=self.settings.app_name, user_id="demo-user", session_id=session_id
-                )
-                runner = Runner(agent=agent, app_name=self.settings.app_name, session_service=session_service)
-                user_message = types.Content(role="user", parts=[types.Part(text=prompt)])
-                async for event in runner.run_async(user_id="demo-user", session_id=session_id, new_message=user_message):
-                    if event.is_final_response() and event.content and event.content.parts:
-                        summary = event.content.parts[0].text or ""
+                summary = await self._run_adk_agent(prompt, gateway)
                 engine_mode = "gemini_adk"
             except Exception as exc:
-                if not self.settings.enable_heuristic_fallback:
-                    raise
-                logger.exception("ADK/Gemini execution failed; falling back to heuristic mode.")
-                errors.append(f"ADK execution failed, used heuristic fallback: {exc}")
-                summary = await self._heuristic_fallback(prompt, gateway, triage)
+                if self._is_resource_exhausted(exc):
+                    retry_delay = self._extract_retry_delay_seconds(exc)
+                    logger.warning("ADK/Gemini quota throttled; retrying once after %s second(s).", retry_delay)
+                    await asyncio.sleep(retry_delay)
+                    try:
+                        summary = await self._run_adk_agent(prompt, gateway)
+                        engine_mode = "gemini_adk"
+                    except Exception as retry_exc:
+                        exc = retry_exc
+                    else:
+                        exc = None
+
+                if exc is None:
+                    pass
+                elif not self.settings.enable_heuristic_fallback:
+                    raise exc
+                else:
+                    logger.exception("ADK/Gemini execution failed; falling back to heuristic mode.")
+                    errors.append(f"ADK execution failed, used heuristic fallback: {exc}")
+                    summary = await self._heuristic_fallback(prompt, gateway, triage)
         else:
             summary = await self._heuristic_fallback(prompt, gateway, triage)
 
         await self._ensure_case_artifacts(prompt, gateway, triage, case_summary, ai_intake)
 
-        if not summary:
+        if not summary or self._is_unhelpful_agent_summary(summary):
             summary = self._compose_summary(gateway)
 
         return WorkflowResult(
             summary=summary,
             case_summary=case_summary,
+            automation_summary=self._build_automation_summary(gateway, engine_mode),
+            suggested_next_action=self._suggest_next_action(triage, gateway.created_tasks or gateway.listed_tasks, customer),
+            confidence_notes=self._build_confidence_notes(prompt, triage),
             steps=gateway.steps,
             triage=triage,
             case=SupportCaseRead.model_validate(support_case),
@@ -188,6 +207,32 @@ class WorkflowEngine:
             notes=gateway.created_notes or gateway.searched_notes,
             errors=errors,
         ), engine_mode
+
+    async def _run_adk_agent(self, prompt: str, gateway: MCPGateway) -> str:
+        agent = build_root_agent(self.settings.gemini_model, gateway)
+        session_service = InMemorySessionService()
+        session_id = f"ticketflow-{uuid.uuid4()}"
+        await session_service.create_session(app_name=self.settings.app_name, user_id="demo-user", session_id=session_id)
+        runner = Runner(agent=agent, app_name=self.settings.app_name, session_service=session_service)
+        user_message = types.Content(role="user", parts=[types.Part(text=prompt)])
+        summary = ""
+        async for event in runner.run_async(user_id="demo-user", session_id=session_id, new_message=user_message):
+            if event.is_final_response() and event.content and event.content.parts:
+                summary = event.content.parts[0].text or ""
+        return summary
+
+    def _is_resource_exhausted(self, exc: Exception) -> bool:
+        return "RESOURCE_EXHAUSTED" in str(exc) or "429" in str(exc)
+
+    def _extract_retry_delay_seconds(self, exc: Exception) -> int:
+        retry_match = re.search(r"retryDelay['\"]?\s*:\s*['\"]?(\d+)s", str(exc))
+        if retry_match:
+            return min(max(int(retry_match.group(1)) + 1, 2), 15)
+        return 5
+
+    def _is_unhelpful_agent_summary(self, summary: str) -> bool:
+        lowered = summary.lower()
+        return "need more information" in lowered or "could you please provide" in lowered
 
     async def _ensure_case_artifacts(
         self,
@@ -230,6 +275,21 @@ class WorkflowEngine:
                         issue_category=triage["issue_category"],
                         assigned_team=triage["assigned_team"],
                         assigned_member=None,
+                        source_text=text,
+                    ),
+                )
+
+        if not gateway.created_events:
+            parsed_schedule = parse_relative_schedule(text)
+            if parsed_schedule:
+                start_at, end_at = parsed_schedule
+                await gateway.create_event(
+                    "calendar_agent",
+                    EventCreate(
+                        title=derive_event_title(text),
+                        description=case_summary,
+                        start_at=start_at,
+                        end_at=end_at,
                         source_text=text,
                     ),
                 )
@@ -317,7 +377,8 @@ class WorkflowEngine:
         return self._compose_summary(gateway)
 
     def _extract_follow_up_tasks(self, text: str) -> list[str]:
-        bullets = []
+        bullets: list[str] = []
+        seen: set[str] = set()
         for line in text.splitlines():
             clean = line.strip("-* ").strip()
             lowered = clean.lower()
@@ -325,10 +386,30 @@ class WorkflowEngine:
                 token in lowered
                 for token in ["follow", "action", "todo", "next step", "will ", "please ", "need to", "must "]
             ):
-                bullets.append(clean[:120])
+                for candidate in self._split_task_candidates(clean):
+                    normalized = candidate.lower()
+                    if normalized not in seen:
+                        seen.add(normalized)
+                        bullets.append(candidate[:120])
         if "customer" in text.lower() and not bullets:
             bullets.append("Review the customer conversation and prepare the next response")
         return bullets or ["Review the conversation and define follow-up actions"]
+
+    def _split_task_candidates(self, text: str) -> list[str]:
+        cleaned = re.sub(r"^(customer|agent|rep|support)\s*:\s*", "", text, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r"^(please|we need to|need to|must|will|todo|action item)\s+", "", cleaned, flags=re.IGNORECASE)
+        fragments = re.split(r",\s*(?:and\s+)?|;\s*|\s+and\s+(?=(?:send|confirm|review|escalate|schedule|remind|call|email|check|prepare)\b)", cleaned, flags=re.IGNORECASE)
+        candidates = []
+        for fragment in fragments:
+            candidate = fragment.strip(" .")
+            if len(candidate) < 4:
+                continue
+            if not re.search(r"[A-Za-z]", candidate):
+                continue
+            if not re.match(r"^(send|confirm|review|escalate|schedule|remind|call|email|check|prepare|follow|create|open|investigate|assign|update)\b", candidate, re.IGNORECASE):
+                candidate = f"Follow up: {candidate}"
+            candidates.append(candidate)
+        return candidates or [cleaned]
 
     def _compose_summary(self, gateway: MCPGateway) -> str:
         parts = []
@@ -366,7 +447,24 @@ class WorkflowEngine:
                 category = next_category
                 break
 
-        severity = "high" if any(token in text for token in ["urgent", "asap", "critical", "today"]) else "medium"
+        high_severity_signals = [
+            "urgent",
+            "asap",
+            "critical",
+            "today",
+            "blocked",
+            "customer blocked",
+            "production outage",
+            "outage",
+            "enterprise renewal risk",
+            "renewal risk",
+            "cannot operate",
+            "can't operate",
+            "down for everyone",
+            "sev1",
+            "sev 1",
+        ]
+        severity = "high" if any(token in text for token in high_severity_signals) else "medium"
         return {
             "issue_category": category,
             "assigned_team": team,
@@ -399,10 +497,16 @@ class WorkflowEngine:
         email_match = re.search(r"([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})", prompt, re.IGNORECASE)
         phone_match = re.search(r"(\+?\d[\d\-\s()]{7,}\d)", prompt)
         name_match = re.search(
-            r"(?:customer|client|caller)\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})",
+            r"(?:customer|client|caller)\s*[:\-]\s*(?:this is|my name is|i am|i'm)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})",
             prompt,
             re.IGNORECASE,
         )
+        if not name_match:
+            name_match = re.search(
+                r"(?:customer|client|caller)\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})",
+                prompt,
+                re.IGNORECASE,
+            )
         if not name_match:
             name_match = re.search(
                 r"(?:my name is|i am|i'm|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})",
@@ -463,6 +567,56 @@ class WorkflowEngine:
         return (
             f"Support case classified as {triage['issue_category']} and routed to {triage['assigned_team']} "
             f"with {triage['severity']} priority. Conversation summary: {condensed}"
+        )
+
+    def _build_automation_summary(self, gateway: MCPGateway, engine_mode: str) -> str:
+        artifacts = []
+        if gateway.created_tasks:
+            artifacts.append(f"{len(gateway.created_tasks)} follow-up task(s)")
+        if gateway.created_events:
+            artifacts.append(f"{len(gateway.created_events)} scheduled event(s)")
+        if gateway.created_notes:
+            artifacts.append(f"{len(gateway.created_notes)} case note(s)")
+        artifact_text = ", ".join(artifacts) if artifacts else "case routing metadata"
+        engine_label = "Gemini ADK specialists" if engine_mode == "gemini_adk" else "deterministic fallback rules"
+        return f"Automated intake, routing, and {artifact_text} through {engine_label}."
+
+    def _suggest_next_action(
+        self, triage: dict[str, str], tasks: list[TaskRead], customer: Customer | None = None
+    ) -> str:
+        open_tasks = [task for task in tasks if task.status == "open"]
+        owner_hint = f"Assign {triage['assigned_team']}" if triage.get("assigned_team") else "Assign an owner"
+        contact_hint = ""
+        if customer and (customer.email or customer.phone):
+            contact_hint = f" and reply to {customer.email or customer.phone}"
+        if open_tasks:
+            return f"{owner_hint} to the first open task, then complete: {open_tasks[0].title}{contact_hint}."
+        return f"{owner_hint}, review the case summary, and confirm the customer follow-up plan{contact_hint}."
+
+    def _build_confidence_notes(self, prompt: str, triage: dict[str, str]) -> str:
+        lower = prompt.lower()
+        matched_signals = []
+        for signal in [
+            "blocked",
+            "production outage",
+            "enterprise renewal risk",
+            "urgent",
+            "billing",
+            "invoice",
+            "password",
+            "login",
+            "api",
+            "webhook",
+            "error",
+            "bug",
+            "onboarding",
+        ]:
+            if signal in lower:
+                matched_signals.append(signal)
+        signal_text = ", ".join(matched_signals[:5]) if matched_signals else "general support language"
+        return (
+            f"Routed to {triage['assigned_team']} as {triage['issue_category']} with {triage['severity']} severity "
+            f"because the transcript included: {signal_text}."
         )
 
     def _normalize_optional_string(self, value: object | None) -> str | None:
@@ -625,9 +779,34 @@ class WorkflowEngine:
             task.priority = payload.priority
             task.status = payload.status
             task.due_at = payload.due_at
+            if task.assigned_team != payload.assigned_team:
+                task.assigned_team = payload.assigned_team
+                task.assigned_member = None
             session.commit()
             session.refresh(task)
             return TaskRead.model_validate(task)
+
+    def update_case(self, case_id: str, payload: SupportCaseUpdate) -> SupportCaseRead:
+        with get_session() as session:
+            support_case = session.get(SupportCase, uuid.UUID(case_id))
+            if support_case is None:
+                raise ValueError("Support case not found.")
+
+            old_team = support_case.assigned_team
+            support_case.assigned_team = payload.assigned_team
+            support_case.issue_category = payload.issue_category
+            support_case.severity = payload.severity
+            support_case.status = payload.status
+
+            if old_team != payload.assigned_team:
+                tasks = session.scalars(select(Task).where(Task.case_id == support_case.id)).all()
+                for task in tasks:
+                    task.assigned_team = payload.assigned_team
+                    task.assigned_member = None
+
+            session.commit()
+            session.refresh(support_case)
+            return SupportCaseRead.model_validate(support_case)
 
     def get_case_detail(self, case_id: str) -> SupportCaseDetailResponse:
         with get_session() as session:
@@ -665,6 +844,15 @@ class WorkflowEngine:
                     )
                     for run in runs
                 ],
+                suggested_next_action=self._suggest_next_action(
+                    {
+                        "issue_category": support_case.issue_category or "General Support",
+                        "assigned_team": support_case.assigned_team or "Support Operations",
+                        "severity": support_case.severity or "medium",
+                    },
+                    [TaskRead.model_validate(task) for task in tasks],
+                    customer,
+                ),
             )
 
     def delete_task(self, task_id: str) -> DeleteResponse:
@@ -729,3 +917,21 @@ class WorkflowEngine:
             session.delete(customer)
             session.commit()
             return DeleteResponse(deleted_id=customer.id, resource="customer")
+
+    def reset_demo_data(self) -> dict[str, int | bool]:
+        with get_session() as session:
+            counts: dict[str, int | bool] = {"ok": True}
+            for model, key in [
+                (WorkflowRun, "workflow_runs"),
+                (Task, "tasks"),
+                (Event, "events"),
+                (Note, "notes"),
+                (SupportCase, "support_cases"),
+                (Customer, "customers"),
+            ]:
+                records = session.scalars(select(model)).all()
+                counts[key] = len(records)
+                for record in records:
+                    session.delete(record)
+            session.commit()
+            return counts

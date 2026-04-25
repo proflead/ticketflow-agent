@@ -6,6 +6,8 @@ from ticketflow_shared.schemas import (
     DeleteResponse,
     StateResponse,
     SupportCaseDetailResponse,
+    SupportCaseRead,
+    SupportCaseUpdate,
     TaskAssignmentUpdate,
     TaskRead,
     TaskUpdate,
@@ -37,11 +39,26 @@ async def get_state() -> StateResponse:
     return engine.get_state()
 
 
+@router.post("/api/demo/reset")
+async def reset_demo_data() -> dict[str, int | bool]:
+    engine = WorkflowEngine(get_settings())
+    return engine.reset_demo_data()
+
+
 @router.get("/api/cases/{case_id}", response_model=SupportCaseDetailResponse)
 async def get_case_detail(case_id: str) -> SupportCaseDetailResponse:
     engine = WorkflowEngine(get_settings())
     try:
         return engine.get_case_detail(case_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/api/cases/{case_id}", response_model=SupportCaseRead)
+async def update_case(case_id: str, payload: SupportCaseUpdate) -> SupportCaseRead:
+    engine = WorkflowEngine(get_settings())
+    try:
+        return engine.update_case(case_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

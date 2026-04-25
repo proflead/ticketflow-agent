@@ -21,6 +21,9 @@ const TEAM_MEMBERS = [
   { name: "Leo Bennett", team: "Frontend Engineering" },
 ];
 
+const TEAMS = Array.from(new Set(TEAM_MEMBERS.map((member) => member.team)));
+const TASK_STATUSES = ["open", "in_progress", "waiting", "completed"];
+
 function formatDate(value?: string | null) {
   if (!value) return "No due date";
   return new Date(value).toLocaleString();
@@ -42,6 +45,7 @@ export function TasksPage() {
     priority: "medium",
     status: "open",
     due_at: "",
+    assigned_team: "",
   });
 
   async function refresh() {
@@ -82,6 +86,7 @@ export function TasksPage() {
       priority: task.priority || "medium",
       status: task.status || "open",
       due_at: task.due_at ? new Date(task.due_at).toISOString().slice(0, 16) : "",
+      assigned_team: task.assigned_team || "",
     });
   }
 
@@ -92,27 +97,28 @@ export function TasksPage() {
       priority: editForm.priority,
       status: editForm.status,
       due_at: editForm.due_at ? new Date(editForm.due_at).toISOString() : null,
+      assigned_team: editForm.assigned_team || null,
     });
     setEditingTaskId(null);
     await refresh();
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-xl shadow-black/5 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/30">
+    <div className="space-y-4 p-5">
+      <section className="rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface)] p-6  ">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Task List</p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">Assign follow-up work to the responsible team member.</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+            <p className="text-sm font-semibold uppercase text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">Task List</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--tf-text)] ">Assign follow-up work to the responsible team member.</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--tf-text-soft)] dark:text-[var(--tf-text-soft)]">
               Every task stays linked to its case and customer. Use this page to review incoming work, filter by team,
-              and assign it to one of the demo operators.
+              and assign it to the responsible operator.
             </p>
           </div>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="rounded-full border border-black/10 px-4 py-2 text-sm text-slate-900 hover:bg-slate-100 dark:border-white/10 dark:text-white dark:hover:bg-white/10"
+            className="rounded-md border border-[var(--tf-border)] px-4 py-2 text-sm text-[var(--tf-text)] hover:bg-[var(--tf-surface-muted)]   dark:hover:bg-[var(--tf-surface)]/10"
           >
             Refresh
           </button>
@@ -122,10 +128,10 @@ export function TasksPage() {
           <button
             type="button"
             onClick={() => setTeamFilter("all")}
-            className={`rounded-full px-4 py-2 text-sm ${
+            className={`rounded-md px-4 py-2 text-sm ${
               teamFilter === "all"
-                ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
-                : "border border-black/10 text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                ? "bg-slate-950 text-white  dark:text-[var(--tf-text)]"
+                : "border border-[var(--tf-border)] text-[var(--tf-text-soft)] hover:bg-[var(--tf-surface-muted)]  dark:text-[var(--tf-text-soft)] dark:hover:bg-[var(--tf-surface)]/10"
             }`}
           >
             All teams
@@ -135,10 +141,10 @@ export function TasksPage() {
               key={team}
               type="button"
               onClick={() => setTeamFilter(team)}
-              className={`rounded-full px-4 py-2 text-sm ${
+              className={`rounded-md px-4 py-2 text-sm ${
                 teamFilter === team
-                  ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
-                  : "border border-black/10 text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                  ? "bg-slate-950 text-white  dark:text-[var(--tf-text)]"
+                  : "border border-[var(--tf-border)] text-[var(--tf-text-soft)] hover:bg-[var(--tf-surface-muted)]  dark:text-[var(--tf-text-soft)] dark:hover:bg-[var(--tf-surface)]/10"
               }`}
             >
               {team}
@@ -150,26 +156,26 @@ export function TasksPage() {
 
       <section className="space-y-4">
         {tasks.length === 0 ? (
-          <div className="rounded-3xl border border-black/10 bg-white/90 p-6 text-sm text-slate-500 shadow-xl shadow-black/5 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-400 dark:shadow-black/30">
+          <div className="rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface)] p-6 text-sm text-[var(--tf-text-muted)]   dark:text-[var(--tf-text-muted)]">
             No tasks available for this filter.
           </div>
         ) : (
           tasks.map((task) => (
             <div
               key={task.id}
-              className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-xl shadow-black/5 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/30"
+              className="rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface)] p-6  "
             >
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-2">
-                    <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
                       {task.assigned_team || "Unassigned team"}
                     </span>
-                    <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
                       {task.priority} priority
                     </span>
                     <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      className={`rounded-md px-3 py-1 text-xs font-medium ${
                         task.status === "completed"
                           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
                           : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200"
@@ -178,7 +184,7 @@ export function TasksPage() {
                       {task.status}
                     </span>
                     {task.issue_category ? (
-                      <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                      <span className="rounded-md bg-[var(--tf-surface-muted)] px-3 py-1 text-xs font-medium text-[var(--tf-text-soft)] dark:bg-[var(--tf-surface-muted)] dark:text-[var(--tf-text-soft)]">
                         {task.issue_category}
                       </span>
                     ) : null}
@@ -189,7 +195,7 @@ export function TasksPage() {
                         <input
                           value={editForm.title}
                           onChange={(event) => setEditForm((current) => ({ ...current, title: event.target.value }))}
-                          className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-950 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                          className="w-full rounded-xl border border-[var(--tf-border)] bg-[var(--tf-surface)] px-3 py-2 text-sm text-[var(--tf-text)]   "
                         />
                         <textarea
                           rows={4}
@@ -197,13 +203,13 @@ export function TasksPage() {
                           onChange={(event) =>
                             setEditForm((current) => ({ ...current, description: event.target.value }))
                           }
-                          className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-950 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                          className="w-full rounded-xl border border-[var(--tf-border)] bg-[var(--tf-surface)] px-3 py-2 text-sm text-[var(--tf-text)]   "
                         />
                         <div className="grid gap-3 md:grid-cols-2">
                           <select
                             value={editForm.priority}
                             onChange={(event) => setEditForm((current) => ({ ...current, priority: event.target.value }))}
-                            className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-950 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                            className="rounded-xl border border-[var(--tf-border)] bg-[var(--tf-surface)] px-3 py-2 text-sm text-[var(--tf-text)]   "
                           >
                             <option value="low">low</option>
                             <option value="medium">medium</option>
@@ -212,31 +218,48 @@ export function TasksPage() {
                           <select
                             value={editForm.status}
                             onChange={(event) => setEditForm((current) => ({ ...current, status: event.target.value }))}
-                            className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-950 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                            className="rounded-xl border border-[var(--tf-border)] bg-[var(--tf-surface)] px-3 py-2 text-sm text-[var(--tf-text)]   "
                           >
-                            <option value="open">open</option>
-                            <option value="completed">completed</option>
+                            {TASK_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {status.replace("_", " ")}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <div className="grid gap-3 md:grid-cols-2">
+                          <select
+                            value={editForm.assigned_team}
+                            onChange={(event) =>
+                              setEditForm((current) => ({ ...current, assigned_team: event.target.value }))
+                            }
+                            className="rounded-xl border border-[var(--tf-border)] bg-[var(--tf-surface)] px-3 py-2 text-sm text-[var(--tf-text)]   "
+                          >
+                            <option value="">Unassigned team</option>
+                            {TEAMS.map((team) => (
+                              <option key={team} value={team}>
+                                {team}
+                              </option>
+                            ))}
+                          </select>
                           <input
                             type="datetime-local"
                             value={editForm.due_at}
                             onChange={(event) => setEditForm((current) => ({ ...current, due_at: event.target.value }))}
-                            className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-950 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                            className="rounded-xl border border-[var(--tf-border)] bg-[var(--tf-surface)] px-3 py-2 text-sm text-[var(--tf-text)]   "
                           />
                         </div>
                       </div>
                     ) : (
                       <>
-                        <h3 className="text-xl font-semibold text-slate-950 dark:text-white">{task.title}</h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">
+                        <h3 className="text-xl font-semibold text-[var(--tf-text)] ">{task.title}</h3>
+                        <p className="mt-2 text-sm leading-6 text-[var(--tf-text-soft)] dark:text-[var(--tf-text-soft)]">
                           {task.description || "No task notes available."}
                         </p>
                       </>
                     )}
                   </div>
-                  <div className="grid gap-3 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-3">
+                  <div className="grid gap-3 text-sm text-[var(--tf-text-soft)] dark:text-[var(--tf-text-soft)] md:grid-cols-3">
                     <p>Created: {formatDate(task.created_at)}</p>
                     <p>Due: {formatDate(task.due_at)}</p>
                     <p>Current owner: {task.assigned_member || "Not assigned"}</p>
@@ -247,14 +270,14 @@ export function TasksPage() {
                         <button
                           type="button"
                           onClick={() => void saveTask(task)}
-                          className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-slate-950"
+                          className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white  dark:text-[var(--tf-text)]"
                         >
                           Save task
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditingTaskId(null)}
-                          className="rounded-full border border-black/10 px-4 py-2 text-sm text-slate-700 dark:border-white/10 dark:text-slate-300"
+                          className="rounded-md border border-[var(--tf-border)] px-4 py-2 text-sm text-[var(--tf-text-soft)]  dark:text-[var(--tf-text-soft)]"
                         >
                           Cancel
                         </button>
@@ -263,7 +286,7 @@ export function TasksPage() {
                       <button
                         type="button"
                         onClick={() => startEditing(task)}
-                        className="rounded-full border border-black/10 px-4 py-2 text-sm text-slate-700 dark:border-white/10 dark:text-slate-300"
+                        className="rounded-md border border-[var(--tf-border)] px-4 py-2 text-sm text-[var(--tf-text-soft)]  dark:text-[var(--tf-text-soft)]"
                       >
                         Edit task
                       </button>
@@ -271,12 +294,12 @@ export function TasksPage() {
                   </div>
                 </div>
 
-                <div className="w-full max-w-sm rounded-2xl border border-black/10 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950/60">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Assign to team member</p>
+                <div className="w-full max-w-sm rounded-lg border border-[var(--tf-border)] bg-[var(--tf-surface-muted)] p-4  dark:bg-[var(--tf-surface-muted)]">
+                  <p className="text-xs font-semibold uppercase text-[var(--tf-text-muted)]">Assign to team member</p>
                   <select
                     value={task.assigned_member || ""}
                     onChange={(event) => void assignTask(task, event.target.value)}
-                    className="mt-3 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-950 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                    className="mt-3 w-full rounded-xl border border-[var(--tf-border)] bg-[var(--tf-surface)] px-3 py-2 text-sm text-[var(--tf-text)]   "
                   >
                     <option value="">Unassigned</option>
                     {membersForTeam(task.assigned_team).map((member) => (
@@ -285,7 +308,7 @@ export function TasksPage() {
                       </option>
                     ))}
                   </select>
-                  <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  <p className="mt-3 text-xs leading-5 text-[var(--tf-text-muted)] dark:text-[var(--tf-text-muted)]">
                     Team assignment stays automatic from classification. You can override the responsible member here.
                   </p>
                 </div>
